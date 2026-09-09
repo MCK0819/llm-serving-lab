@@ -1,0 +1,49 @@
+# LLM Serving Lab
+
+회사 문서를 찾아 답하는 AI 서비스를 만들며, 모델을 직접 배포하고 속도·장애·보안을 검증하는 프로젝트입니다.
+
+Self-hosted LLM serving backend with FastAPI, vLLM, and Korean document RAG.
+
+## 만드는 이유
+
+Python 백엔드 개발 경험을 AI Backend / LLM Serving으로 확장하기 위한 포트폴리오입니다. 문서 Q&A를 통해 여러 사람이 동시에 질문할 때의 성능, 연결이 끊겼을 때의 처리, 다른 조직의 문서가 섞이지 않도록 하는 권한을 검증합니다.
+
+## 현재 상태
+
+**설계와 구현 계획을 작성한 단계입니다.** 애플리케이션 구현·실제 GPU 배포·성능 측정은 아직 수행하지 않았습니다. 아래 구성은 구현할 목표이며 완성된 기능 목록이 아닙니다.
+
+## 목표 구성
+
+```text
+질문 → FastAPI → 문서 검색·근거 구성 → 원격 vLLM → 답변 스트리밍
+                    ↓
+             PostgreSQL + pgvector
+                    ↑
+PDF 업로드 → 작업 접수 → Celery Worker → 파싱·청크·CPU 임베딩
+```
+
+- Python 3.14와 FastAPI 기반 Modular Monolith
+- 원격 vLLM에서 Qwen3-4B-Instruct-2507 직접 서빙
+- 한국어 텍스트 PDF, CPU TEI 임베딩, PostgreSQL/pgvector 검색
+- 비동기 문서 처리, SSE 취소·시간 제한, 조직별 접근 제한
+- Prometheus/Grafana 관측과 Locust 부하 시험
+
+초기에는 GPU 한 대와 생성 모델 하나로 시작합니다. 동시성 1/10/50/100은 측정 조건이며 처리 성능 보장이 아닙니다. 성능 결과는 실제 측정 이후 재현 조건과 함께 공개합니다.
+
+## 문서
+
+- [처음 읽는 분을 위한 설명](docs/introduction.md)
+- [설계 명세](docs/superpowers/specs/2026-09-09-llm-serving-lab-design.md)
+- [API와 운영 규칙](docs/superpowers/specs/2026-09-10-llm-serving-lab-contracts.md)
+- [선택한 이유와 대안 — 의사결정 기록](docs/decisions/README.md)
+- [14개 단계별 구현 계획](docs/superpowers/plans/2026-09-10-llm-serving-lab.md)
+- [전체 문서 안내](docs/README.md)
+
+## 진행 순서
+
+1. 스트리밍과 실제 GPU 연동
+2. 문서 처리와 RAG
+3. 보안·장애 복구·관측
+4. 부하 측정·병목 개선·재측정
+
+실행 명령과 배포 절차는 실제 검증 후 추가합니다. 평가에는 직접 작성한 가상 회사 문서를 사용하며 실제 사내 문서·API Key·모델 가중치는 저장소에 포함하지 않습니다.
