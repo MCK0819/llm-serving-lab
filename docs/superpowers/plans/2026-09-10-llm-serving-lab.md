@@ -123,7 +123,7 @@ def create_app(settings: Settings) -> FastAPI:
 
 **Interfaces:** `Delta(text: str)`, `Usage(input_tokens: int, output_tokens: int)`, `Completed(reason: Literal['stop','length'], usage: Usage | None)` are frozen dataclasses. `SSEParser.feed(data: bytes) -> list[str]` emits complete SSE data payloads, `finish() -> None` rejects an incomplete event. `InferenceClient(http: httpx.AsyncClient, model: str).open(messages: list[dict[str,str]])` returns an async context manager yielding an `AsyncIterator[Delta | Completed]`. It enters the upstream connection and validates HTTP status before yielding the iterator.
 
-- [ ] Write byte-boundary tests. Bytes may split inside a Korean character or between CR/LF. Add multiple data lines, comments, event and buffer limit tests individually.
+- [x] Write byte-boundary tests. Bytes may split inside a Korean character or between CR/LF. Add multiple data lines, comments, event and buffer limit tests individually.
 
 ```python
 from app.inference.sse_parser import SSEParser
@@ -137,9 +137,9 @@ def test_korean_bytes_can_arrive_one_at_a_time():
     assert payloads == ['{"text":"안녕"}']
 ```
 
-- [ ] Run `python -m pytest tests/unit/test_sse_parser.py -q` → expected RED, then implement a bounded byte buffer with incremental UTF-8 decoding. Parse blank-line-delimited SSE and join repeated `data:` lines with `\n`; do not use an unlimited `aiter_lines()` buffer for hostile input.
-- [ ] In `test_inference_client.py`, use `httpx.MockTransport` and an `AsyncByteStream` fake whose `aclose()` records closure. Test valid delta/finish/[DONE]/usage; empty choices usage; invalid JSON/type; 5xx; ConnectError; ReadTimeout; EOF before normal finish; cancellation. Each failed test precedes its implementation.
-- [ ] Implement the connection lifetime with the supplied HTTP client. Client creation happens in lifespan, not inside the request loop.
+- [x] Run `python -m pytest tests/unit/test_sse_parser.py -q` → expected RED, then implement a bounded byte buffer with incremental UTF-8 decoding. Parse blank-line-delimited SSE and join repeated `data:` lines with `\n`; do not use an unlimited `aiter_lines()` buffer for hostile input.
+- [x] In `test_inference_client.py`, use `httpx.MockTransport` and an `AsyncByteStream` fake whose `aclose()` records closure. Test valid delta/finish/[DONE]/usage; empty choices usage; invalid JSON/type; 5xx; ConnectError; ReadTimeout; EOF before normal finish; cancellation. Each failed test precedes its implementation.
+- [x] Implement the connection lifetime with the supplied HTTP client. Client creation happens in lifespan, not inside the request loop.
 
 ```python
 async with self.http.stream(
@@ -152,8 +152,8 @@ async with self.http.stream(
     # Feed response.aiter_bytes() into SSEParser; yield typed events.
 ```
 
-- [ ] Map known connection unavailability to 503, malformed/5xx to 502, timeout to 504 using AppError. Never wrap cancellation as a retryable error. Handle role-only chunks; accept only stop/length completion; preserve null usage if absent. Reject tool events. Close upstream on every exit.
-- [ ] Run both test modules and typing. Commit `feat: add bounded inference stream client`.
+- [x] Map known connection unavailability to 503, malformed/5xx to 502, timeout to 504 using AppError. Never wrap cancellation as a retryable error. Handle role-only chunks; accept only stop/length completion; preserve null usage if absent. Reject tool events. Close upstream on every exit.
+- [x] Run both test modules and typing. Commit `feat: add bounded inference stream client`.
 
 ## Task 3: 처리 자리와 중단 가능한 SSE 전송
 
@@ -491,7 +491,7 @@ assert outcome.status == "failed"
 | 재배포·백업·복원 | 11 |
 | 부하·병목·재측정·품질·README | 13, 14 |
 
-Task 1 앱 기초 구현·검증을 완료했다. 구체화한 범위는 [검증 기록](../../verification/bootstrap.md)에 남겼다. 다음 구현 시작점은 **Task 2의 bounded SSE parser 실패 테스트**다. 환경 기동·GPU 호환성과 벤치마크 수치는 계획 작성 시 검증된 것으로 간주하지 않는다.
+Task 1 앱 기초 구현·검증을 완료했다. 구체화한 범위는 [검증 기록](../../verification/bootstrap.md)에 남겼다. Task 2 스트림 파서·HTTP 클라이언트도 구현했다. [검증 기록](../../verification/inference-client.md)을 참고한다. 다음은 **Task 3의 처리 자리·취소 가능한 SSE 전송**이다. 환경 기동·GPU 호환성과 벤치마크 수치는 계획 작성 시 검증된 것으로 간주하지 않는다.
 
 ## 구현 시 확인할 공식 자료
 
@@ -501,6 +501,7 @@ Task 1 앱 기초 구현·검증을 완료했다. 구체화한 범위는 [검증
 - [Locust request measurement](https://docs.locust.io/en/stable/writing-a-locustfile.html): response 판정과 스트리밍 측정 구현을 고정 버전과 대조한다.
 
 자료 확인일: 2026-09-10. 문서상의 최신 버전 번호를 검증 없이 프로젝트 잠금 버전으로 옮기지 않는다.
+
 
 
 
