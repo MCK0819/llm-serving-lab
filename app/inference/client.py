@@ -58,6 +58,18 @@ class InferenceClient:
             raise self._invalid() from None
 
     async def _events(self, response: httpx.Response) -> AsyncGenerator[Delta | Completed]:
+        # Iteration errors must be translated here: AsyncExitStack closes the
+        # upstream context normally and does not inject an iteration exception.
+        try:
+            async with aclosing(self._decode_events(response)) as decoded:
+                async for event in decoded:
+                    yield event
+        except httpx.TimeoutException:
+            raise AppError(504, "inference_timeout", "모델 응답 시간이 초과되었습니다.") from None
+        except httpx.HTTPError:
+            raise self._invalid() from None
+
+    async def _decode_events(self, response: httpx.Response) -> AsyncGenerator[Delta | Completed]:
         parser = SSEParser()
         reason: FinishReason | None = None
         usage: Usage | None = None

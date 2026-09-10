@@ -10,9 +10,11 @@ Python 백엔드 개발 경험을 AI Backend / LLM Serving으로 확장하기 �
 
 ## 현재 상태
 
-**첫 API 구현 단계입니다.** Python 3.14.7 환경, liveness API, 요청 ID, 공통 오류 응답과 설정 검증을 구현했습니다. 실제 GPU 배포·RAG·성능 측정은 다음 단계입니다. 아래 구성은 전체 목표입니다.
+**스트리밍 기반 구현 단계입니다.** Python 3.14.7 환경, 기본 API, 생성 서버 스트림 해석, 요청 대기 제한과 연결 정리를 구현했습니다. 공개 질문 경로·실제 GPU 배포·RAG·성능 측정은 다음 단계입니다. 아래 구성은 전체 목표입니다.
 
 실행 방법은 [개발 안내](docs/development.md), 확인한 범위와 한계는 [검증 기록](docs/verification/bootstrap.md)을 참고하세요.
+
+연결 끊김·시간 초과·느린 수신자에 대한 결과는 [스트리밍 검증 기록](docs/verification/stream-lifecycle.md)에 정리했습니다.
 
 ## 목표 구성
 

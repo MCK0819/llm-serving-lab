@@ -161,7 +161,7 @@ async with self.http.stream(
 
 **Interfaces:** `Admission(running_limit: int, waiting_limit: int, wait_seconds: float).slot()` is an async context manager. `encode_event(event: str, payload: dict[str, object]) -> bytes`. `StreamResponse` is an ASGI response owning an `AsyncExitStack` containing the admission slot and open upstream; the stack is closed even when response start/send/disconnect fails. Consumes Task 2 typed events.
 
-- [ ] Write and run the first rejection test; use tiny explicit test limits rather than sleeping production durations.
+- [x] Write and run the first rejection test; use tiny explicit test limits rather than sleeping production durations.
 
 ```python
 import pytest
@@ -179,9 +179,9 @@ async def test_full_admission_rejects_without_waiting():
         pass
 ```
 
-- [ ] Implement counters and FIFO waiters under one async lock; remove cancelled waiters, bound waiting count, release exactly once. Test queued cancellation, wait expiry, release/timeout race separately before implementing them.
-- [ ] Write ASGI send/receive fakes: one send waits on an Event; one receive emits http.disconnect. Assert upstream closure and slot reacquisition in both cases; successful sources→delta→done and failing error are separate tests. Include failure while opening upstream before headers.
-- [ ] Implement bounded sending; the deadline covers slot acquisition **after** waiting, through final cleanup. Use a disconnect watcher during preparation too, so a disconnected waiting client does not linger until timeout.
+- [x] Implement counters and FIFO waiters using synchronous state transitions on one event loop (no await during counter changes); remove cancelled waiters, bound waiting count, release exactly once. Test queued cancellation, wait expiry, release/timeout race separately before implementing them.
+- [x] Write ASGI send/receive fakes: one send waits on an Event; one receive emits http.disconnect. Assert upstream closure and slot reacquisition in both cases; successful sources→delta→done and failing error are separate tests. Include failure while opening upstream before headers.
+- [x] Implement bounded sending; the deadline covers slot acquisition **after** waiting, through final cleanup. Use a disconnect watcher during preparation too, so a disconnected waiting client does not linger until timeout.
 
 ```python
 async with asyncio.timeout(send_timeout):
@@ -189,9 +189,11 @@ async with asyncio.timeout(send_timeout):
                 "more_body": True})
 ```
 
-- [ ] Use a single close owner and `finally` for the exit stack. No producer queue is needed between generator and send. Cancel sibling watcher tasks and await them. No error event after done or after disconnect; no second terminal event when the first terminal send fails.
-- [ ] Add real Uvicorn TCP tests: disconnect after first delta, upstream stalls, slow reader, bounded memory and free slot afterwards. ASGI fakes test deterministic send timeout; TCP tests test real closure without assuming TCP buffers fill after one small event.
-- [ ] Run unit modules and `python -m pytest tests/integration/test_stream_socket.py -q`. Commit `feat: bound and cancel streaming requests`.
+- [x] Use a single close owner and `finally` for the exit stack. No producer queue is needed between generator and send. Cancel sibling watcher tasks and await them. No error event after done or after disconnect; no second terminal event when the first terminal send fails.
+- [x] Add real Uvicorn TCP tests: disconnect after first delta, upstream stalls, slow reader, bounded event production and free slot afterwards (RSS measurement deferred to load testing). ASGI fakes test deterministic send timeout; TCP tests test real closure without assuming TCP buffers fill after one small event.
+- [x] Run unit modules and `python -m pytest tests/integration/test_stream_socket.py -q`. Commit `feat: bound and cancel streaming requests`.
+
+검증 범위와 구현 조정은 [스트리밍 검증 기록](../../verification/stream-lifecycle.md)을 참고한다.
 
 ## Task 4: 인증과 질문 경로의 첫 연결
 
