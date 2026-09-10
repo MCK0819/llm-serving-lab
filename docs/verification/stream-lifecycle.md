@@ -42,7 +42,21 @@ mypy app: no issues found in 14 source files
 pip check: no broken requirements found
 ```
 
-Linux 컨테이너 재검증은 이번 단계에서 완료하지 못했다. Docker Desktop 시작을 시도했지만 Linux 엔진의 named pipe를 찾지 못했고, 이어진 상태 확인도 응답하지 않았다. 따라서 이번 변경이 Linux에서 통과했다고 주장하지 않는다. 엔진 복구 후 위 pytest 명령을 해시 고정 개발 의존성과 Python 3.14.7 이미지에서 다시 실행해야 한다.
+최초 Linux 검증 시 Docker 엔진이 응답하지 않았으나, 같은 날 재검증에서는 정상 응답했다. Docker Desktop 4.43.1 / Engine 28.3.0 / linux/amd64에서 다음을 확인했다. 애플리케이션 코드는 변경하지 않았다.
+
+```text
+Python 3.14.7 (프로젝트 Dockerfile과 같은 digest 고정 이미지)
+pip install --require-hashes -r requirements-dev.lock: 성공
+pytest tests/unit tests/integration/test_stream_socket.py -q -p no:cacheprovider
+72 passed in 2.75s
+pip check: No broken requirements found.
+docker build -t llm-serving-lab:task3-verify .: 성공
+빌드한 이미지의 기본 명령으로 실행: 성공
+GET /health/live: HTTP 200, {"status":"ok"}, X-Request-ID 존재
+실행 UID: 10001 (비root)
+```
+
+테스트 컨테이너는 소스 폴더를 읽기 전용으로 마운트하고 해시 고정 개발 의존성을 설치했다. 배포용 이미지 검증은 별도로 빌드한 컨테이너 안에서 실제 HTTP 요청을 보냈다. 시험 컨테이너는 검증 후 종료·제거했다. Windows와 Linux의 테스트 통과는 확인했지만 두 환경의 성능이 같다는 뜻은 아니다.
 
 ## 남은 검증
 
