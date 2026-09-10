@@ -46,7 +46,7 @@ vLLM·TEI는 별도 서버의 이미지별 지원 환경을 따른다. 애플리
 
 ## 파일과 책임 지도
 
-현재 앱 코드와 Git 저장소는 없다. 아래는 **생성 예정 경로**이며 존재하는 파일 링크가 아니다. 공통 기반을 만들기 위한 빈 클래스·빈 디렉터리는 미리 생성하지 않는다.
+계획 작성 당시 앱 코드와 Git 저장소는 없었다. 현재 Git 저장소와 첫 API는 생성되었다. 아래는 **생성 예정 경로**이며 존재하는 파일 링크가 아니다. 공통 기반을 만들기 위한 빈 클래스·빈 디렉터리는 미리 생성하지 않는다.
 
 | 경로 | 책임 |
 |---|---|
@@ -77,16 +77,16 @@ Task 1에서 `integration`, `gpu`, `load` marker를 등록한다. 기본 테스�
 
 아직 생성되지 않은 경로는 해당 작업이 생성한 뒤 검사한다. Docker 기반 검증은 Linux 컨테이너에서 `python -m pytest`로 동일한 테스트를 실행한다. ASGI 메모리 transport만으로 실제 네트워크 streaming·disconnect를 검증했다고 하지 않는다.
 
-커밋은 각 Task의 GREEN 후 해당 파일만 stage한다. Git이 없으므로 Task 1 실행 때 저장소 초기화와 ignore를 함께 준비하고 사용자 기존 파일을 일괄 stage하지 않는다. 실행 전에 using-git-worktrees 절차로 작업 위치를 확인한다. 이 계획 작성 단계에서는 코드·Git·클라우드 자원을 생성하지 않았다.
+커밋은 각 Task의 GREEN 후 해당 파일만 stage한다. Git 저장소 초기화와 최초 문서 커밋은 완료했다. 구현 파일만 선택적으로 stage한다. 실행 전에 using-git-worktrees 절차로 작업 위치를 확인한다. 이 계획 작성 단계에서는 코드·Git·클라우드 자원을 생성하지 않았다.
 
 ## Task 1: 실행 가능한 앱과 안전한 오류 응답
 
 **Files:** Create `pyproject.toml`, `requirements.lock`, `.gitignore`, `.dockerignore`, `Dockerfile`, `app/__init__.py`, `app/main.py`, `app/core/settings.py`, `app/core/errors.py`, `app/core/request_context.py`, `tests/unit/test_app.py`.
 
-**Interfaces:** Produces `create_app(settings: Settings) -> FastAPI`, `AppError(status: int, code: str, message: str)`, `Settings` with validated DB/TEI/vLLM URLs and the numeric limits from Global Constraints. `GET /health/live` returns `{"status":"ok"}`; it needs no external service.
+**Interfaces:** Produces `create_app(settings: Settings) -> FastAPI`, `AppError(status: int, code: str, message: str)`, `Settings` with validated TEI/vLLM URLs and inference limits. DB·문서·작업 설정은 해당 기능 단계에서 검증과 함께 추가한다. `GET /health/live` returns `{"status":"ok"}`; it needs no external service.
 
-- [ ] Python 실행 환경을 확인한다: `py -0p`, `docker version`, `git --version`. `py -3.14 -m venv .venv314`로 별도 환경을 만든다. 3.14가 없다면 공식 배포판 준비를 선행하고 3.10으로 계속 진행하지 않는다. 생성 후 `python --version`으로 3.14.7 이상 3.14 패치인지 확인하고 실제 패치 버전을 기록한다.
-- [ ] 첫 실패 테스트를 작성한다. pytest와 FastAPI 설치는 이 테스트에 필요한 준비로 수행한다.
+- [x] Python 실행 환경을 확인한다: `py -0p`, `docker version`, `git --version`. `py -3.14 -m venv .venv314`로 별도 환경을 만든다. 3.14가 없다면 공식 배포판 준비를 선행하고 3.10으로 계속 진행하지 않는다. 생성 후 `python --version`으로 3.14.7 이상 3.14 패치인지 확인하고 실제 패치 버전을 기록한다.
+- [x] 첫 실패 테스트를 작성한다. pytest와 FastAPI 설치는 이 테스트에 필요한 준비로 수행한다.
 
 ```python
 from fastapi.testclient import TestClient
@@ -101,8 +101,8 @@ def test_liveness_without_model_or_database():
     assert response.headers["x-request-id"]
 ```
 
-- [ ] `python -m pytest tests/unit/test_app.py -q` 실행: 앱 부재로 실패를 확인한다.
-- [ ] 최소 앱을 작성하고 UUID request ID middleware를 추가한다. 설정 기본값으로 인증 없는 공개 upstream을 사용하지 않는다. URL 검증과 실제 연결은 분리해 liveness에 DB를 강제하지 않는다.
+- [x] `python -m pytest tests/unit/test_app.py -q` 실행: 앱 부재로 실패를 확인한다.
+- [x] 최소 앱을 작성하고 UUID request ID middleware를 추가한다. 설정 기본값으로 인증 없는 공개 upstream을 사용하지 않는다. URL 검증과 실제 연결은 분리해 liveness에 DB를 강제하지 않는다.
 
 ```python
 def create_app(settings: Settings) -> FastAPI:
@@ -113,9 +113,9 @@ def create_app(settings: Settings) -> FastAPI:
     return app
 ```
 
-- [ ] AppError와 validation error의 안전한 공통 JSON, 예상치 못한 예외의 일반화한 500, request ID를 각각 실패 테스트부터 추가한다. 예외 메시지에 `secret-marker`를 심고 응답에 없음을 검증한다.
-- [ ] 해당 테스트 GREEN→ruff/mypy. `pyproject.toml`에 Python `>=3.14,<3.15`, pytest 설정을 고정한다. 필요한 패키지만 설치하고 잠금 파일에 전이 의존성을 포함한다. `python -m pip check`와 핵심 의존성 import를 먼저 확인한다. SQLAlchemy 드라이버·Pydantic·tokenizers·Celery·Locust의 전이 의존성은 실제 3.14 Windows/Linux 환경에서 검증한다. 설치 실패 시 원인을 기록하고 조용히 Python을 낮추지 않는다. Docker Python 패치·배포판·digest와 ruff py314/mypy 3.14 설정도 일치시킨다. 이미지의 비root 실행·ignore(`.venv*`, `.env`, credentials, PDF/모델 캐시)를 구성한다.
-- [ ] 커밋: `feat: bootstrap typed API and safe error responses`.
+- [x] AppError와 validation error의 안전한 공통 JSON, 예상치 못한 예외의 일반화한 500, request ID를 각각 실패 테스트부터 추가한다. 예외 메시지에 `secret-marker`를 심고 응답에 없음을 검증한다.
+- [x] 해당 테스트 GREEN→ruff/mypy. `pyproject.toml`에 Python `>=3.14,<3.15`, pytest 설정을 고정한다. 필요한 패키지만 설치하고 잠금 파일에 전이 의존성을 포함한다. `python -m pip check`와 핵심 의존성 import를 먼저 확인한다. SQLAlchemy 드라이버·Pydantic·tokenizers·Celery·Locust의 전이 의존성은 실제 3.14 Windows/Linux 환경에서 검증한다. 설치 실패 시 원인을 기록하고 조용히 Python을 낮추지 않는다. Docker Python 패치·배포판·digest와 ruff py314/mypy 3.14 설정도 일치시킨다. 이미지의 비root 실행·ignore(`.venv*`, `.env`, credentials, PDF/모델 캐시)를 구성한다.
+- [x] 커밋: `feat: bootstrap typed API and safe error responses`.
 
 ## Task 2: 생성 서버 스트림 해석과 연결 정리
 
@@ -491,7 +491,7 @@ assert outcome.status == "failed"
 | 재배포·백업·복원 | 11 |
 | 부하·병목·재측정·품질·README | 13, 14 |
 
-최초 구현 시작점은 **Task 1의 Python 환경 확인과 liveness 실패 테스트**다. 환경 기동·GPU 호환성과 벤치마크 수치는 계획 작성 시 검증된 것으로 간주하지 않는다.
+Task 1 앱 기초 구현·검증을 완료했다. 구체화한 범위는 [검증 기록](../../verification/bootstrap.md)에 남겼다. 다음 구현 시작점은 **Task 2의 bounded SSE parser 실패 테스트**다. 환경 기동·GPU 호환성과 벤치마크 수치는 계획 작성 시 검증된 것으로 간주하지 않는다.
 
 ## 구현 시 확인할 공식 자료
 
@@ -501,5 +501,6 @@ assert outcome.status == "failed"
 - [Locust request measurement](https://docs.locust.io/en/stable/writing-a-locustfile.html): response 판정과 스트리밍 측정 구현을 고정 버전과 대조한다.
 
 자료 확인일: 2026-09-10. 문서상의 최신 버전 번호를 검증 없이 프로젝트 잠금 버전으로 옮기지 않는다.
+
 
 
