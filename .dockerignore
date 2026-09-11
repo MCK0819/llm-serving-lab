@@ -2,6 +2,12 @@
 !app/
 !app/**
 !requirements.lock
+!requirements-dev.lock
 !Dockerfile
+!alembic.ini
+!migrations/
+!migrations/**
+!deploy/
+!deploy/Dockerfile.test
 **/__pycache__/
 **/*.pyc

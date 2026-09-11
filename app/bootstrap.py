@@ -1,11 +1,55 @@
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from dataclasses import dataclass
 
 import httpx
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
+from app.core.database import create_database
 from app.core.settings import Settings
+from app.inference.admission import Admission
 from app.inference.client import InferenceClient
+from app.users.repository import UserRepository
+from app.users.service import AuthService
+
+
+@dataclass(frozen=True)
+class ApplicationServices:
+    engine: AsyncEngine | None
+    auth: AuthService | None
+    admission: Admission
+
+
+def build_services(settings: Settings) -> ApplicationServices:
+    engine = (
+        create_database(settings.database_url.get_secret_value()) if settings.database_url else None
+    )
+    auth = (
+        AuthService(UserRepository(async_sessionmaker(engine, expire_on_commit=False)))
+        if engine
+        else None
+    )
+    return ApplicationServices(
+        engine,
+        auth,
+        Admission(settings.running_limit, settings.waiting_limit, settings.waiting_timeout),
+    )
+
+
+def application_lifespan(
+    settings: Settings, services: ApplicationServices
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        try:
+            async with inference_lifespan(settings)(app):
+                yield
+        finally:
+            if services.engine is not None:
+                await services.engine.dispose()
+
+    return lifespan
 
 
 def inference_lifespan(

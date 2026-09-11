@@ -201,7 +201,7 @@ async with asyncio.timeout(send_timeout):
 
 **Interfaces:** `Identity(user_id: UUID, organization_id: UUID)`; `AuthService.authenticate(raw_key: str) -> Identity` async. Repository `find_active_key(key_id: UUID)` returns hashed credential and identity. `POST /questions` schema has only nonblank `question`; unknown fields are forbidden. This task wires the route to a temporary test-only context provider, not a public ungrounded chat endpoint. Production RAG wiring arrives in Task 9.
 
-- [ ] Write the contract test with Pydantic `extra='forbid'` and whitespace normalization.
+- [x] Write the contract test with Pydantic `extra='forbid'` and whitespace normalization.
 
 ```python
 import pytest
@@ -213,17 +213,19 @@ def test_client_cannot_change_model_or_tenant():
         QuestionInput(question="휴가 규정", organization_id="other", model="other")
 ```
 
-- [ ] Run RED; implement the schema. Then test 401 missing/invalid/revoked key and correct org resolution against PostgreSQL. Seed two organizations and three users via a fixture; cleanup uses an isolated test database only.
-- [ ] Implement random high-entropy per-user keys, e.g. `key_id.secret` with `secrets.token_urlsafe(32)`; store SHA-256 of the random secret and compare with `hmac.compare_digest`. Key ID is a lookup identifier, not authentication. CLI issues once and supports revocation. No logs contain the raw key.
+- [x] Run RED; implement the schema. Then test 401 missing/invalid/revoked key and correct org resolution against PostgreSQL. Seed two organizations and three users via a fixture; cleanup uses an isolated test database only.
+- [x] Implement random high-entropy per-user keys, e.g. `key_id.secret` with `secrets.token_urlsafe(32)`; store SHA-256 of the random secret and compare with `hmac.compare_digest`. Key ID is a lookup identifier, not authentication. CLI issues once and supports revocation. No logs contain the raw key.
 
 ```python
 digest = hashlib.sha256(secret.encode("utf-8")).hexdigest()
 valid = hmac.compare_digest(digest, stored_digest)
 ```
 
-- [ ] Implement migration, concrete repository, request-scoped sessions, service injection in bootstrap. No DB access in router. Do not hold a session transaction across a stream. Test-only fixtures supply fictional sources so SSE integration can run before ingestion exists.
-- [ ] Run `docker compose -f deploy/compose.test.yaml run --rm test python -m pytest tests/integration/test_auth.py -q` after test PostgreSQL health passes. Secrets are supplied via local environment, never committed.
-- [ ] Commit `feat: authenticate tenant-scoped requests`.
+- [x] Implement migration, concrete repository, request-scoped sessions, service injection in bootstrap. No DB access in router. Do not hold a session transaction across a stream. Test-only fixtures supply fictional sources so SSE integration can run before ingestion exists.
+- [x] Run `docker compose -f deploy/compose.test.yaml run --rm test python -m pytest tests/integration/test_auth.py -q` after test PostgreSQL health passes. Secrets are supplied via local environment, never committed.
+- [x] Commit `feat: authenticate tenant-scoped requests`.
+
+검증: [인증과 조직 구분](../../verification/authentication.md). 기본 질문 경로는 인증 뒤 RAG 미준비 503을 반환하며, 성공 스트림은 테스트 준비 함수로만 검증했다. 질문 16 KiB 수신 제한도 이 단계에서 적용했다.
 
 ## Task 5: 첫 원격 GPU·CPU 임베딩 기동 검증
 

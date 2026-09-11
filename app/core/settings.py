@@ -1,10 +1,12 @@
 from typing import Self
+from urllib.parse import urlsplit
 
 from pydantic import (
     HttpUrl,
     NonNegativeInt,
     PositiveFloat,
     PositiveInt,
+    SecretStr,
     field_validator,
     model_validator,
 )
@@ -17,6 +19,7 @@ class Settings(BaseSettings):
     )
 
     inference_url: HttpUrl = HttpUrl("http://127.0.0.1:8001")
+    database_url: SecretStr | None = None
     embedding_url: HttpUrl = HttpUrl("http://127.0.0.1:8080")
     running_limit: PositiveInt = 2
     waiting_limit: NonNegativeInt = 4
@@ -27,6 +30,19 @@ class Settings(BaseSettings):
     send_timeout: PositiveFloat = 10
     context_tokens: PositiveInt = 4096
     output_tokens: PositiveInt = 512
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            parsed = urlsplit(value.get_secret_value())
+            if (
+                parsed.scheme != "postgresql+psycopg"
+                or not parsed.hostname
+                or not parsed.path.strip("/")
+            ):
+                raise ValueError("Use a named PostgreSQL database with the psycopg driver")
+        return value
 
     @field_validator("inference_url", "embedding_url")
     @classmethod

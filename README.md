@@ -10,11 +10,13 @@ Python 백엔드 개발 경험을 AI Backend / LLM Serving으로 확장하기 �
 
 ## 현재 상태
 
-**스트리밍 기반 구현 단계입니다.** Python 3.14.7 환경, 기본 API, 생성 서버 스트림 해석, 요청 대기 제한과 연결 정리를 구현했습니다. 공개 질문 경로·실제 GPU 배포·RAG·성능 측정은 다음 단계입니다. 아래 구성은 전체 목표입니다.
+**인증과 스트리밍 기반 구현 단계입니다.** 14개 구현 단계 중 4개를 완료했습니다. 기본 API, 스트리밍 제한·연결 정리, PostgreSQL 기반 API Key 인증과 조직 구분을 구현했습니다. 실제 GPU 배포·문서 처리·RAG·성능 측정은 다음 단계입니다. 질문 경로는 인증 후 RAG 미준비 상태를 반환하며, 성공 스트림은 시험용 데이터로 검증했습니다. 아래 구성은 전체 목표입니다.
 
 실행 방법은 [개발 안내](docs/development.md), 확인한 범위와 한계는 [검증 기록](docs/verification/bootstrap.md)을 참고하세요.
 
 연결 끊김·시간 초과·느린 수신자에 대한 결과는 [스트리밍 검증 기록](docs/verification/stream-lifecycle.md)에 정리했습니다.
+
+Windows 92개, Linux와 실제 PostgreSQL을 포함한 97개 테스트가 통과했습니다. [인증 검증 기록](docs/verification/authentication.md)에서 확인한 범위와 한계를 볼 수 있습니다.
 
 ## 목표 구성
 

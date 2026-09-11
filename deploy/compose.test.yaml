@@ -1,0 +1,40 @@
+name: llm-lab-auth-test
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: llm_lab_auth_test
+      POSTGRES_USER: llm_lab_test
+      POSTGRES_PASSWORD: ${LLM_LAB_TEST_DB_PASSWORD:?Set LLM_LAB_TEST_DB_PASSWORD to a generated test-only password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    tmpfs:
+      - /var/lib/postgresql/data:rw,noexec,nosuid,size=512m
+    networks:
+      - auth-test
+
+  test:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.test
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+    environment:
+      LLM_LAB_DATABASE_URL: postgresql+psycopg://llm_lab_test:${LLM_LAB_TEST_DB_PASSWORD:?Set LLM_LAB_TEST_DB_PASSWORD to a generated test-only password}@postgres:5432/llm_lab_auth_test
+      LLM_LAB_TEST_DATABASE_URL: postgresql+psycopg://llm_lab_test:${LLM_LAB_TEST_DB_PASSWORD:?Set LLM_LAB_TEST_DB_PASSWORD to a generated test-only password}@postgres:5432/llm_lab_auth_test
+      PYTEST_ADDOPTS: -p no:cacheprovider
+    volumes:
+      - ../:/srv/llm-serving-lab:ro
+    networks:
+      - auth-test
+
+networks:
+  auth-test:
+    internal: true
