@@ -23,7 +23,15 @@ ruff format --check app scripts tests migrations: 48 files already formatted
 mypy app scripts: no issues found in 28 source files
 ```
 
-2026-09-12 Linux 최종 재검증은 Docker Linux 엔진이 응답하지 않아 완료하지 못했다. Desktop 재시작 뒤 프로세스는 확인했으나 `docker version`의 서버 응답이 돌아오지 않았다. 이전 실행에서는 112개가 통과했지만 이후 큰 정수 응답 사례 등을 보완했으므로 최종 변경의 Linux 통과 결과로 대신하지 않는다. 엔진 복구 후 [개발 안내](../development.md)의 전체 통합 테스트를 다시 실행한다.
+2026-09-12 첫 Linux 재검증은 Docker 엔진 무응답으로 진행하지 못했으나, 이후 엔진 복구를 확인하고 최종 변경 전체를 다시 검증했다. Docker Engine 28.3.0, 고정된 Python 3.14.7 이미지와 해시 고정 의존성을 사용했다.
+
+```text
+docker compose -f deploy/compose.test.yaml build test: 성공
+docker compose -f deploy/compose.test.yaml run --rm test python -m pytest tests/unit tests/integration -q
+113 passed in 14.08s
+```
+
+실제 PostgreSQL에 마이그레이션을 적용한 뒤 단위·TCP·인증 통합 테스트를 실행했다. 시험 컨테이너와 네트워크는 종료·제거했다. 재현 명령은 [개발 안내](../development.md)에 있다.
 
 점검 스크립트 테스트에는 실제 `python -m` 실행의 종료 코드와 비밀값 비노출, 응답 없는 작업의 시간 제한, 빈 답변, 연결 종료, 잘못된 벡터와 과도하게 큰 정수 응답을 포함한다.
 
