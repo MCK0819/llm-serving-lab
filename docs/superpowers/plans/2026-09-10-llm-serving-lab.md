@@ -259,7 +259,7 @@ Task 5 중간 결과(2026-09-11): 검증 스크립트와 후보 버전을 준비
 
 **Interfaces:** `DocumentService.accept(identity: Identity, filename: str, body: AsyncIterator[bytes]) -> DocumentReceipt`; async `list(identity, limit, cursor)`, `get(identity, document_id)`, `delete(identity, document_id)`. `FileStorage.save(organization_id, document_id, body) -> Path` async; blocking disk operations are offloaded. Tables: documents, jobs, chunks. Job row one per document; chunks unique `(document_id, ordinal, embedding_revision)`, vector(384), FK org/document relationships enforced.
 
-- [ ] In `test_documents.py` define `api_a`, `api_b`, `pdf_file` fixtures: two org-scoped authenticated clients and a tiny valid text PDF. Write cross-org lookup test before route implementation.
+- [x] In `test_documents.py` define `api_a`, `api_b`, `pdf_file` fixtures: two org-scoped authenticated clients and a tiny valid text PDF. Write cross-org lookup test before route implementation.
 
 ```python
 async def test_document_id_does_not_grant_cross_tenant_access(api_a, api_b, pdf_file):
@@ -270,9 +270,9 @@ async def test_document_id_does_not_grant_cross_tenant_access(api_a, api_b, pdf_
     assert response.status_code == 404
 ```
 
-- [ ] Run RED, then implement the five document operations and safe response schemas. Add same-org shared read, uploader-only delete, repeated delete, cursor ties/invalid cursor, deleted invisibility tests one at a time.
-- [ ] Enforce actual received body bytes in ASGI before multipart parsing; enforce file size while storing, one file part, bounded filename metadata, and PDF signature/media type. No full PDF parse in HTTP request. Test false Content-Length and missing Content-Length with oversized chunks.
-- [ ] Save to a generated path, atomically finalize the file, then insert document+job in one transaction. Acquire one transaction advisory lock for global admission counts; enforce org10/global100 in that transaction. Never use user filename in a filesystem path.
+- [x] Run RED, then implement the four contracted document operations and safe response schemas. Add same-org shared read, uploader-only delete, repeated delete, cursor ties/invalid cursor, deleted invisibility tests one at a time.
+- [x] Enforce actual received body bytes in ASGI before multipart parsing; enforce file size while storing, one file part, bounded filename metadata, and PDF signature/media type. No full PDF parse in HTTP request. Test false Content-Length and missing Content-Length with oversized chunks.
+- [x] Save to a generated path, atomically finalize the file, then insert document+job in one transaction. Acquire one transaction advisory lock for global admission counts; enforce org10/global100 in that transaction. Never use user filename in a filesystem path.
 
 ```sql
 SELECT pg_advisory_xact_lock(741001);
@@ -280,8 +280,10 @@ SELECT pg_advisory_xact_lock(741001);
 -- then insert document and job within the same transaction.
 ```
 
-- [ ] Test disk-full/DB commit failure cleans partial files, Redis unavailable still returns202, concurrent admissions do not exceed caps. Broker send is after commit, with a short timeout; failure leaves a recoverable DB job. Deletion locks the document row, records deleted, and excludes new searches immediately.
-- [ ] Run document integration + storage/body unit tests. Commit `feat: persist tenant-scoped document jobs`.
+- [x] Test disk-full/DB commit failure cleans partial files, Redis unavailable still returns202, concurrent admissions do not exceed caps. Broker send is after commit, with a short timeout; failure leaves a recoverable DB job. Deletion locks the document row, records deleted, and excludes new searches immediately.
+- [x] Run document integration + storage/body unit tests. Commit `feat: persist tenant-scoped document jobs`.
+
+검증: Windows 129개, Linux·실제 PostgreSQL 전체 172개 통과. [문서 접수 검증 기록](../../verification/documents.md). 5단계 원격 GPU 부분은 미완료 상태로 유지한다. DB 커밋 결과 불명확 시 파일을 보존하며, 논리 삭제 원본과 미등록 파일의 청소·작업 복구는 8단계에서 연결한다. 알림 브로커는 선택 설정이고 Worker는 아직 실행하지 않는다.
 
 ## Task 7: 페이지 파싱·청크·CPU 임베딩
 

@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 
 from app.bootstrap import application_lifespan, build_services
+from app.core.body_limit import BodyLimitMiddleware
 from app.core.errors import register_error_handlers
 from app.core.request_context import RequestContextMiddleware
 from app.core.settings import Settings
+from app.documents.router import build_document_router
 from app.rag.router import QuestionPreparer, build_question_router
 
 
@@ -15,8 +17,10 @@ def create_app(
     services = build_services(settings)
     app = FastAPI(title="LLM Serving Lab", lifespan=application_lifespan(settings, services))
     app.state.settings = settings
+    app.add_middleware(BodyLimitMiddleware, maximum_bytes=settings.document_request_bytes)
     app.add_middleware(RequestContextMiddleware)
     register_error_handlers(app)
+    app.include_router(build_document_router(services.auth, services.documents))
     app.include_router(
         build_question_router(services.auth, prepare_question, services.admission, settings)
     )

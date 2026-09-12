@@ -34,6 +34,10 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
+        if getattr(request.state, "body_limit_exceeded", False):
+            return error_response(
+                request, 413, "request_too_large", "요청 크기 제한을 초과했습니다."
+            )
         code = {401: "unauthorized", 403: "forbidden", 404: "not_found"}.get(
             exc.status_code, "http_error"
         )

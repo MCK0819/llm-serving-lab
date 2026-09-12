@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Self
 from urllib.parse import urlsplit
 
@@ -30,6 +31,27 @@ class Settings(BaseSettings):
     send_timeout: PositiveFloat = 10
     context_tokens: PositiveInt = 4096
     output_tokens: PositiveInt = 512
+    upload_root: Path = Path("data/uploads")
+    document_file_bytes: PositiveInt = 20 * 1024**2
+    document_request_bytes: PositiveInt = 21 * 1024**2
+    document_minimum_free_bytes: NonNegativeInt = 1024**3
+    organization_job_limit: PositiveInt = 10
+    global_job_limit: PositiveInt = 100
+    broker_url: SecretStr | None = None
+
+    @field_validator("broker_url")
+    @classmethod
+    def validate_broker_url(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None:
+            parsed = urlsplit(value.get_secret_value())
+            if (
+                parsed.scheme not in {"redis", "rediss"}
+                or not parsed.hostname
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("Use a Redis broker URL without query or fragment")
+        return value
 
     @field_validator("database_url")
     @classmethod

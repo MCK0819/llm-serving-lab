@@ -10,7 +10,7 @@ Python 백엔드 개발 경험을 AI Backend / LLM Serving으로 확장하기 �
 
 ## 현재 상태
 
-**인증과 스트리밍 기반 구현 단계입니다.** 14개 구현 단계 중 4개를 완료했습니다. 기본 API, 스트리밍 제한·연결 정리, PostgreSQL 기반 API Key 인증과 조직 구분을 구현했습니다. 실제 GPU 배포·문서 처리·RAG·성능 측정은 다음 단계입니다. 질문 경로는 인증 후 RAG 미준비 상태를 반환하며, 성공 스트림은 시험용 데이터로 검증했습니다. 아래 구성은 전체 목표입니다.
+**문서 접수·조회·삭제까지 구현했습니다.** 14개 구현 단계 중 1–4단계와 6단계, 총 5개를 완료했습니다. 기본 API, 스트리밍 제한·연결 정리, API Key 인증, 조직별 문서 접근과 영속 작업 기록을 구현했습니다. 원격 GPU 검증은 보류하고 GPU 없이 가능한 문서 단계를 먼저 진행했습니다. PDF 분석·Worker·RAG·성능 측정은 아직 남아 있습니다. 질문 경로는 인증 후 RAG 미준비 상태를 반환하며, 성공 스트림은 시험용 데이터로 검증했습니다. 아래 구성은 전체 목표입니다.
 
 실행 방법은 [개발 안내](docs/development.md), 확인한 범위와 한계는 [검증 기록](docs/verification/bootstrap.md)을 참고하세요.
 
@@ -21,6 +21,8 @@ Python 백엔드 개발 경험을 AI Backend / LLM Serving으로 확장하기 �
 5단계는 진행 중입니다. 로컬 CPU TEI에서 실제 한국어 임베딩(384차원)을 확인했고, 생성·취소·임베딩 점검 명령을 준비했습니다. 원격 GPU 계정·배포·실제 생성 검증은 남아 있습니다. [모델 실행 환경 기록](docs/experiments/environment.md)
 
 배포 준비 변경까지 포함해 Windows 108개, Linux·PostgreSQL 전체 113개 테스트가 통과했습니다. [배포 전 점검 기록](docs/verification/serving-preflight.md)
+
+6단계 변경 후 Windows 129개, Linux·실제 PostgreSQL 전체 172개 테스트가 통과했습니다. PDF 업로드 크기 제한, 다른 조직의 접근 차단, 동시 접수 한도, 취소 시 파일 정리와 큐 연결 실패를 검증했습니다. 접수된 문서는 Worker 구현 전까지 `queued` 상태입니다. [문서 접수 검증 기록](docs/verification/documents.md)
 
 ## 목표 구성
 

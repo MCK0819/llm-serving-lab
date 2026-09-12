@@ -6,6 +6,7 @@ from sqlalchemy import Connection
 
 from app.core.database import Base, create_database
 from app.core.settings import Settings
+from app.documents import models as document_models  # noqa: F401
 from app.users import models  # noqa: F401
 
 

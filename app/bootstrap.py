@@ -8,6 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.core.database import create_database
 from app.core.settings import Settings
+from app.documents.notifications import JobNotifier
+from app.documents.repository import DocumentRepository
+from app.documents.service import DocumentService
+from app.documents.storage import FileStorage
 from app.inference.admission import Admission
 from app.inference.client import InferenceClient
 from app.users.repository import UserRepository
@@ -19,6 +23,7 @@ class ApplicationServices:
     engine: AsyncEngine | None
     auth: AuthService | None
     admission: Admission
+    documents: DocumentService | None
 
 
 def build_services(settings: Settings) -> ApplicationServices:
@@ -34,6 +39,21 @@ def build_services(settings: Settings) -> ApplicationServices:
         engine,
         auth,
         Admission(settings.running_limit, settings.waiting_limit, settings.waiting_timeout),
+        DocumentService(
+            DocumentRepository(
+                async_sessionmaker(engine, expire_on_commit=False),
+                organization_job_limit=settings.organization_job_limit,
+                global_job_limit=settings.global_job_limit,
+            ),
+            FileStorage(
+                settings.upload_root,
+                maximum_bytes=settings.document_file_bytes,
+                minimum_free_bytes=settings.document_minimum_free_bytes,
+            ),
+            JobNotifier(settings.broker_url.get_secret_value()) if settings.broker_url else None,
+        )
+        if engine
+        else None,
     )
 
 
