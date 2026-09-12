@@ -78,3 +78,15 @@ python -m app.users.cli revoke-key --key-id <키 앞부분 UUID>
 DB 설정을 생략해도 liveness는 동작한다. 문서 처리·전체 보안·관측은 아직 구현 중이다. 검증 기록은 [첫 API 검증](verification/bootstrap.md), [인증과 조직 구분](verification/authentication.md)에 있다.
 
 스트리밍의 동작과 제한은 [스트리밍 수명주기 검증](verification/stream-lifecycle.md)을 참고한다.
+
+## 모델 기동 점검
+
+5단계 준비로 실제 CPU TEI의 한국어 임베딩을 검증했다. 실행 절차는 [모델 서버 기동](runbooks/deployment.md), 고정한 버전과 측정값은 [환경 기록](experiments/environment.md)에 있다. GPU 대여는 아직 하지 않았다.
+
+```powershell
+.venv314/Scripts/python.exe -m scripts.smoke_embedding --endpoint http://127.0.0.1:18081
+.venv314/Scripts/python.exe -m scripts.smoke_inference --endpoint http://127.0.0.1:18000
+.venv314/Scripts/python.exe -m scripts.smoke_inference --endpoint http://127.0.0.1:18000 --cancel-after-first-text
+```
+
+대상 서버나 SSH 터널을 먼저 준비해야 한다. 기본 전체 제한은 120초이며 실패 시 JSON 요약과 0이 아닌 종료 코드를 반환한다. 프롬프트·답변·벡터·토큰 비밀값을 결과에 출력하지 않는다. 생성 취소 명령은 클라이언트 연결 정리만 검사하므로 실제 GPU 작업 종료는 별도 지표로 확인해야 한다. 단위 테스트에는 모델 다운로드나 GPU가 필요 없다.

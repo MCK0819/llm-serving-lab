@@ -18,6 +18,10 @@ Python 백엔드 개발 경험을 AI Backend / LLM Serving으로 확장하기 �
 
 Windows 92개, Linux와 실제 PostgreSQL을 포함한 97개 테스트가 통과했습니다. [인증 검증 기록](docs/verification/authentication.md)에서 확인한 범위와 한계를 볼 수 있습니다.
 
+5단계는 진행 중입니다. 로컬 CPU TEI에서 실제 한국어 임베딩(384차원)을 확인했고, 생성·취소·임베딩 점검 명령을 준비했습니다. 원격 GPU 계정·배포·실제 생성 검증은 남아 있습니다. [모델 실행 환경 기록](docs/experiments/environment.md)
+
+배포 준비 변경의 Windows 테스트는 108개가 통과했습니다. 최종 Linux 재검증은 Docker 엔진 복구 후 진행해야 합니다. [배포 전 점검 기록](docs/verification/serving-preflight.md)
+
 ## 목표 구성
 
 ```text

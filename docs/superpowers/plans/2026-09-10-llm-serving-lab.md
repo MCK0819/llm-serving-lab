@@ -234,7 +234,7 @@ valid = hmac.compare_digest(digest, stored_digest)
 **Interfaces:** Smoke scripts accept endpoint and model identity through environment/CLI; credentials only through environment. Output timings/status/token counts to JSON, with no sensitive payloads. Model lock record contains provider, region, GPU/CPU/RAM, driver, image digests, model/tokenizer revisions, vLLM arguments and measured memory.
 
 - [ ] Before any paid run, compare actual checkout estimate including storage/IP/tax with 100,000원 cap, SSH forwarding support, GPU availability, CPU region distance. Record concrete selected resources and teardown steps. Planning approval does not create an account or invent credentials; missing account access is an execution dependency to request when this task is reached.
-- [ ] Write smoke assertions before starting the server. Use a fictional fixed prompt and require nonempty text and exactly one completion. The script exits nonzero on protocol failure.
+- [x] Write smoke assertions before starting the server. Use a fictional fixed prompt and require nonempty text and exactly one completion. The script exits nonzero on protocol failure.
 
 ```python
 events = []
@@ -250,7 +250,10 @@ assert sum(isinstance(event, Completed) for event in events) == 1
 - [ ] Start CPU TEI with the E5 candidate; verify 384 finite dimensions, normalization and Korean query/passage handling. Record image revision, CPU RAM peak and chosen process memory caps. Keep model downloads out of default unit tests.
 - [ ] Freeze the successful environment record; if unsuccessful record the exact failure and adjust deployment within scope before claiming this milestone. Stop paid GPU resources and verify billing state/storage separately. Commit `docs: record verified serving environment` with sanitized configuration only.
 
+Task 5 중간 결과(2026-09-11): 검증 스크립트와 후보 버전을 준비했고 로컬 CPU TEI에서 384차원·정규화·512토큰 초과 거부를 확인했다. 원격 계정·CPU/GPU 선정과 원격 검증은 남아 있으므로 Task 5 전체는 미완료다. [환경 기록](../../experiments/environment.md), [비용 원장](../../experiments/cost-ledger.md).
+
 ## Task 6: 문서 접수·조회·삭제와 영속 상태
+
 
 **Files:** Create `app/documents/{models,schemas,storage,repository,service,router}.py`, `app/core/body_limit.py`, `migrations/versions/0002_documents_jobs_chunks.py`, `tests/integration/test_documents.py`, `tests/unit/test_storage.py`, `test_body_limit.py`; modify bootstrap and Compose.
 

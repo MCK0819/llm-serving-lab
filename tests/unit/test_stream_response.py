@@ -158,6 +158,7 @@ async def test_cleanup_precedes_blocked_error_transmission() -> None:
     from app.inference.response import PreparedStream, StreamResponse
 
     closed = asyncio.Event()
+    error_send_attempted = asyncio.Event()
 
     @asynccontextmanager
     async def resource() -> AsyncIterator[None]:
@@ -168,7 +169,8 @@ async def test_cleanup_precedes_blocked_error_transmission() -> None:
             closed.set()
 
     async def events() -> AsyncIterator[Delta | Completed]:
-        await asyncio.Event().wait()
+        # Trigger the failure directly; this test checks ordering, not clock precision.
+        raise TimeoutError
         yield Delta("never")
 
     async def prepare(stack: AsyncExitStack) -> PreparedStream:
@@ -181,12 +183,15 @@ async def test_cleanup_precedes_blocked_error_transmission() -> None:
 
     async def send(message: dict) -> None:
         if b"event: error" in message.get("body", b""):
+            assert closed.is_set()
+            error_send_attempted.set()
             await asyncio.Event().wait()
 
-    await StreamResponse(prepare, Admission(1, 0, 1), "id", execution_seconds=0.1)(
+    await StreamResponse(prepare, Admission(1, 0, 1), "id", execution_seconds=1, send_seconds=0.01)(
         {"type": "http"}, receive, send
     )
     assert closed.is_set()
+    assert error_send_attempted.is_set()
 
 
 async def test_cleanup_failure_does_not_send_second_http_start() -> None:

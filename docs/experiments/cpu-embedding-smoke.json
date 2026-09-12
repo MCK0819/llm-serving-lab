@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-11",
+  "environment": "local Docker Desktop Linux CPU; not remote production",
+  "model_id": "intfloat/multilingual-e5-small",
+  "model_sha": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+  "status": "ok",
+  "dimensions": 384,
+  "vectors": 2,
+  "embedding_ms": 76.89559999926132,
+  "long_input_status": 422,
+  "max_input_length": 512,
+  "memory_peak_bytes": 1661943808,
+  "memory_limit_bytes": 2147483648,
+  "oom_killed": false,
+  "is_benchmark": false
+}
