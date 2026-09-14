@@ -291,7 +291,7 @@ SELECT pg_advisory_xact_lock(741001);
 
 **Interfaces:** `PageText(page: int, text: str)`, `Chunk(ordinal: int, page: int, text: str)`; sync `parse_pdf(path: Path) -> list[PageText]`; `chunk_pages(pages, tokenizer) -> list[Chunk]`. `EmbeddingClient(http, tokenizer, revision).embed_query(text: str) -> list[float]` and `.embed_passages(texts: list[str]) -> list[list[float]]` async. `Tokenizer` adapter exposes `count(text: str) -> int` and offset mapping for boundaries; generator adapter also exposes `count_messages(messages) -> int` with chat template.
 
-- [ ] Write an embedding transport test with a fixture recording outgoing request JSON; return known normalized 384-vector data.
+- [x] Write an embedding transport test with a fixture recording outgoing request JSON; return known normalized 384-vector data.
 
 ```python
 async def test_passage_prefix_is_added_once(embedding_client, recorded_requests):
@@ -299,8 +299,8 @@ async def test_passage_prefix_is_added_once(embedding_client, recorded_requests)
     assert recorded_requests[0]["inputs"] == ["passage: 휴가 규정"]
 ```
 
-- [ ] Run RED. Keep raw text in chunks; add exactly one service-owned `passage: ` or `query: ` at the call boundary. User text beginning with those words is content, not an instruction to strip it. Validate prefixed special-token count≤512; no implicit truncate.
-- [ ] Add tests for wrong dimension, NaN, zero-norm vector, wrong batch length, timeout and malformed TEI data. Reject invalid vectors; normalize consistently in the adapter before storage/query.
+- [x] Run RED. Keep raw text in chunks; add exactly one service-owned `passage: ` or `query: ` at the call boundary. User text beginning with those words is content, not an instruction to strip it. Validate prefixed special-token count≤512; no implicit truncate.
+- [x] Add tests for wrong dimension, NaN, zero-norm vector, wrong batch length, timeout and malformed TEI data. Reject invalid vectors; normalize consistently in the adapter before storage/query.
 
 ```python
 norm = math.sqrt(sum(value * value for value in vector))
@@ -309,9 +309,11 @@ if len(vector) != 384 or not all(math.isfinite(v) for v in vector) or norm == 0:
 normalized = [value / norm for value in vector]
 ```
 
-- [ ] Build synthetic pypdf fixtures for corrupt/password/no-text/too-many-pages/extraction cap and a small authored Korean PDF for integration. Default unit tests use deterministic tokenizer doubles; actual pinned tokenizers have dedicated compatibility tests. Test same-page overlap≤40, total≤300, advancing offsets, long Korean sentence boundaries and special-token budget.
-- [ ] Implement pypdf in the Worker process, page1-based text extraction, paragraph/sentence-preferred splitting with tokenizer offsets and no cross-page overlap. Enforce page/character/chunk caps and batches≤16.
-- [ ] Run unit modules, then explicit TEI integration against Task5 CPU image with network-free cached model. Commit `feat: parse and embed bounded Korean document chunks`.
+- [x] Build synthetic pypdf fixtures for corrupt/password/no-text/too-many-pages/extraction cap and a small authored Korean PDF for integration. Default unit tests use deterministic tokenizer doubles; actual pinned tokenizers have dedicated compatibility tests. Test same-page overlap≤40, total≤300, advancing offsets, long Korean sentence boundaries and special-token budget.
+- [x] Implement synchronous pypdf processing for the future Worker process, page1-based text extraction, paragraph/sentence-preferred splitting with tokenizer offsets and no cross-page overlap. Enforce page/character/chunk caps and batches≤16. Worker execution wiring remains Task 8.
+- [x] Run unit modules, then explicit TEI integration against Task5 CPU image with network-free cached model. Commit `feat: parse and embed bounded Korean document chunks`.
+
+검증: Windows 193개, 실제 CPU TEI·고정 E5/Qwen 토크나이저 7개 통과. [PDF 처리 검증 기록](../../verification/document-processing.md). 실제 토크나이저로 발견한 Qwen 메시지 반환 형식과 E5 제로폭 문자 처리를 수정했다. 원격 GPU·Worker 자동 처리·RAG 연결은 아직 미완료다.
 
 ## Task 8: Worker 중복 처리와 중단 복구
 

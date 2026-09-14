@@ -4,6 +4,10 @@ services:
   tei:
     image: ${LLM_LAB_TEI_IMAGE:?Provide the pinned image from models.env.example}
     profiles: [embedding]
+    environment:
+      HF_HUB_OFFLINE: ${LLM_LAB_MODELS_OFFLINE:-0}
+      TRANSFORMERS_OFFLINE: ${LLM_LAB_MODELS_OFFLINE:-0}
+      HF_HUB_DISABLE_TELEMETRY: "1"
     command:
       - --model-id
       - ${LLM_LAB_EMBEDDING_MODEL:?Provide embedding model}

@@ -1,6 +1,6 @@
 # 개발 시작하기
 
-현재는 기본 API, 생성 서버 통신, 스트리밍 제한, API Key 인증과 문서 접수·조회·삭제를 구현했다. 질문 경로는 실제 문서 검색을 아직 연결하지 않아 유효한 키에는 `503 rag_unavailable`을 반환한다. PDF 분석과 Worker 실행은 다음 단계다.
+현재는 기본 API, 생성 서버 통신, 스트리밍 제한, API Key 인증, 문서 접수·조회·삭제와 PDF 처리 부품을 구현했다. 질문 경로는 실제 문서 검색을 아직 연결하지 않아 유효한 키에는 `503 rag_unavailable`을 반환한다. 업로드 작업과 PDF 처리 부품을 연결하는 Worker는 다음 단계다.
 
 ## Windows에서 실행
 
@@ -84,7 +84,7 @@ DB와 계정·키를 준비한 앱의 `/docs`에서 Authorize에 발급한 키�
 | GET /documents/{문서 번호} | 상태 확인. 다른 조직이나 삭제한 문서는 404 |
 | DELETE /documents/{문서 번호} | 올린 사람만 삭제 가능. 조회에서 즉시 제외 |
 
-현재는 Worker가 없으므로 접수 후 상태가 `queued`에 머문다. 텍스트 추출·암호화·손상 확인은 이후 Worker가 담당한다. 지금은 PDF 형식 표시와 시작 바이트만 검사하며, 접수 성공이 분석 성공을 뜻하지 않는다. 삭제는 논리 삭제이고 실제 파일 청소·재시도는 8단계에서 연결한다.
+현재는 Worker가 없으므로 접수 후 상태가 `queued`에 머문다. 텍스트 추출·암호화·손상 확인 부품은 구현했으며 이후 Worker가 호출한다. 업로드 시점에는 PDF 형식 표시와 시작 바이트만 검사하므로 접수 성공이 분석 성공을 뜻하지 않는다. 삭제는 논리 삭제이고 실제 파일 청소·재시도는 8단계에서 연결한다.
 
 파일은 최대 20 MiB, multipart 요청 전체는 21 MiB다. 조직별 미완료 작업 10개·전체 100개, 저장 공간 최소 여유 1 GiB를 적용한다. 파일 이름은 255자까지의 표시 정보이며 실제 파일 경로에는 사용하지 않는다.
 
@@ -113,3 +113,32 @@ DB 설정을 생략해도 liveness는 동작한다. 문서 처리·전체 보안
 ```
 
 대상 서버나 SSH 터널을 먼저 준비해야 한다. 기본 전체 제한은 120초이며 실패 시 JSON 요약과 0이 아닌 종료 코드를 반환한다. 프롬프트·답변·벡터·토큰 비밀값을 결과에 출력하지 않는다. 생성 취소 명령은 클라이언트 연결 정리만 검사하므로 실제 GPU 작업 종료는 별도 지표로 확인해야 한다. 단위 테스트에는 모델 다운로드나 GPU가 필요 없다.
+
+## PDF 처리 부품과 실제 토크나이저 시험
+
+7단계의 `parse_pdf`, `chunk_pages`, `EmbeddingClient`는 Worker에서 조합할 처리 부품이다. 현재 업로드 API가 이들을 자동 실행하지는 않는다. 동기 PDF 파싱과 토크나이저 처리를 HTTP 요청 안에서 호출하지 않는다.
+
+첫 준비에는 네트워크가 필요하다. 잠금 파일의 의존성을 설치한 환경에서 다음 명령으로 고정된 E5·Qwen 토크나이저 파일만 받는다. 생성 모델 가중치는 받지 않는다. 캐시와 파일 해시는 Git에서 제외된 `.cache/tokenizers`에 남는다.
+
+```powershell
+.venv314/Scripts/python.exe -m scripts.cache_tokenizers
+```
+
+TEI 모델도 처음에는 [모델 기동 절차](runbooks/deployment.md#cpu-tei-확인)로 한 번 실행해 캐시를 준비한다. 그다음 캐시만 사용해 검증한다.
+
+```powershell
+$env:LLM_LAB_TEST_E5_TOKENIZER = (Resolve-Path .cache/tokenizers/e5).Path
+$env:LLM_LAB_TEST_QWEN_TOKENIZER = (Resolve-Path .cache/tokenizers/qwen).Path
+$env:LLM_LAB_TEST_TEI_URL = "http://127.0.0.1:18081"
+$env:LLM_LAB_MODELS_OFFLINE = "1"
+docker compose --env-file deploy/models.env.example -f deploy/compose.yaml --profile embedding up -d tei
+# TEI가 ready 상태가 된 후 실행한다.
+.venv314/Scripts/python.exe -m pytest tests/integration/test_tei.py -q
+docker compose --env-file deploy/models.env.example -f deploy/compose.yaml --profile embedding down
+Remove-Item Env:LLM_LAB_MODELS_OFFLINE
+Remove-Item Env:LLM_LAB_TEST_E5_TOKENIZER, Env:LLM_LAB_TEST_QWEN_TOKENIZER, Env:LLM_LAB_TEST_TEI_URL
+```
+
+테스트는 토크나이저 버전·해시, Qwen 메시지 토큰 수, 한글 청크의 크기·내용 보존, 작성한 PDF에서 실제 384차원 벡터까지 확인한다. `LLM_LAB_TEST_*` 설정이 없으면 해당 통합 시험은 건너뛴다. 일반 단위 테스트 통과와 실제 모델 통합 시험 통과를 구분한다. 캐시가 없는 상태에서 offline 모드를 켜면 기동할 수 없다.
+
+처리 규칙과 검증 범위는 [PDF 처리 기록](verification/document-processing.md)에 정리했다.
