@@ -23,7 +23,9 @@ async def test_db_failure_removes_saved_pdf_and_returns_safe_error(tmp_path):
         await service.accept(Identity(uuid4(), uuid4()), "policy.pdf", body())
     assert error.value.status == 503
     assert "private" not in str(error.value)
-    assert not [path for path in tmp_path.rglob("*") if path.is_file()]
+    # Stable .upload lock inodes remain as coordination metadata, never PDF content.
+    assert not list(tmp_path.rglob("*.pdf"))
+    assert not list(tmp_path.rglob("*.part"))
 
 
 @pytest.mark.parametrize("filename", ["", "x" * 256, "bad\x00name.pdf", "bad\nname.pdf"])

@@ -39,6 +39,12 @@ class DocumentService:
         ):
             raise AppError(422, "invalid_filename", "문서 이름을 확인해 주세요.")
         document_id = uuid4()
+        async with self.storage.track_upload(identity.organization_id, document_id):
+            return await self._accept_tracked(identity, document_id, filename, body)
+
+    async def _accept_tracked(
+        self, identity: Identity, document_id: UUID, filename: str, body: AsyncIterator[bytes]
+    ) -> DocumentReceipt:
         path = await self.storage.save(identity.organization_id, document_id, body)
         # Once a transaction starts, settle it before deciding whether its file is disposable.
         task = asyncio.create_task(

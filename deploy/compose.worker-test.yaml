@@ -1,0 +1,101 @@
+name: llm-lab-worker-test
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.6-pg17-bookworm@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+    environment:
+      POSTGRES_DB: llm_lab_worker_test
+      POSTGRES_USER: llm_lab_test
+      POSTGRES_PASSWORD: ${LLM_LAB_TEST_DB_PASSWORD:?Set a generated test-only password}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    tmpfs:
+      - /var/lib/postgresql/data:rw,noexec,nosuid,size=512m
+    networks: [worker-test]
+
+  redis:
+    image: redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 2s
+    tmpfs:
+      - /data:rw,noexec,nosuid,size=64m
+    networks: [worker-test]
+
+  stub-tei:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.test
+    entrypoint:
+      - python
+      - -m
+      - uvicorn
+      - tests.fixtures.stub_tei:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --no-access-log
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 2s
+    volumes:
+      - ../:/srv/llm-serving-lab:ro
+    networks: [worker-test]
+
+  test:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.test
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+        restart: true
+      stub-tei:
+        condition: service_healthy
+        restart: true
+    command:
+      - python
+      - -m
+      - pytest
+      - tests/integration/test_worker_process.py
+      - -q
+      - -s
+    environment:
+      LLM_LAB_DATABASE_URL: postgresql+psycopg://llm_lab_test:${LLM_LAB_TEST_DB_PASSWORD:?Set a generated test-only password}@postgres:5432/llm_lab_worker_test
+      LLM_LAB_TEST_DATABASE_URL: postgresql+psycopg://llm_lab_test:${LLM_LAB_TEST_DB_PASSWORD:?Set a generated test-only password}@postgres:5432/llm_lab_worker_test
+      LLM_LAB_TEST_BROKER_URL: redis://redis:6379/0
+      LLM_LAB_TEST_TEI_URL: http://stub-tei:8000
+      LLM_LAB_TEST_E5_TOKENIZER: /srv/tokenizer/e5
+      LLM_LAB_EMBEDDING_REVISION: 614241f622f53c4eeff9890bdc4f31cfecc418b3
+      MYPY_CACHE_DIR: /tmp/mypy-cache
+      PYTEST_ADDOPTS: -p no:cacheprovider
+    volumes:
+      - ../:/srv/llm-serving-lab:ro
+      - ../.cache/tokenizers/e5:/srv/tokenizer/e5:ro
+    cpus: 2
+    mem_limit: 2g
+    pids_limit: 128
+    networks: [worker-test]
+
+networks:
+  worker-test:
+    internal: true

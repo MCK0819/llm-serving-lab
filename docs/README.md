@@ -19,7 +19,7 @@
 
 ## 기록 원칙
 
-현재 구현·검증 결과는 [문서 접수](verification/documents.md)와 [PDF 텍스트 추출·청크·CPU 임베딩](verification/document-processing.md)에 이어서 기록했다. CPU 임베딩은 실제 실행했고, 원격 GPU 생성·Worker 자동 처리·RAG 연결은 아직 남아 있다.
+현재 구현·검증 결과는 [문서 접수](verification/documents.md), [PDF 텍스트 추출·청크·CPU 임베딩](verification/document-processing.md), [Worker 중단 복구](verification/worker-recovery.md)에 기록한다. CPU 임베딩과 Worker 처리를 구현했으며, 원격 GPU 생성·RAG 연결은 아직 남아 있다.
 
 - 쉬운 설명 → 구체적인 예 → 기술 용어 순서로 설명합니다. 약어는 처음 등장할 때 뜻을 풀어 씁니다.
 - 비유는 이해를 돕는 용도입니다. 실제로 보장하는 동작과 한계는 별도로 적습니다.

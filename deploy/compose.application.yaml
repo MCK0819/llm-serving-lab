@@ -1,0 +1,125 @@
+name: llm-lab-cpu
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.6-pg17-bookworm@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+    profiles: [application]
+    environment:
+      POSTGRES_DB: llm_lab
+      POSTGRES_USER: llm_lab
+      POSTGRES_PASSWORD: ${LLM_LAB_APP_DB_PASSWORD:?Set an application database password outside Git}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [backend]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952
+    profiles: [application]
+    environment:
+      LLM_LAB_REDIS_PASSWORD: ${LLM_LAB_REDIS_PASSWORD:?Set a Redis password outside Git}
+    command:
+      - /bin/sh
+      - -ec
+      - exec redis-server --save '' --appendonly no --requirepass "$$LLM_LAB_REDIS_PASSWORD" --maxmemory 64mb --maxmemory-policy noeviction
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$LLM_LAB_REDIS_PASSWORD\" redis-cli ping | grep -qx PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks: [backend]
+    mem_limit: 128m
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    profiles: [application]
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LLM_LAB_DATABASE_URL: ${LLM_LAB_APPLICATION_DATABASE_URL:?Set a complete encoded DB URL outside Git}
+    networks: [backend]
+    restart: "no"
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    profiles: [application]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment: &app_environment
+      LLM_LAB_DATABASE_URL: ${LLM_LAB_APPLICATION_DATABASE_URL:?Set a complete encoded DB URL outside Git}
+      LLM_LAB_BROKER_URL: ${LLM_LAB_APPLICATION_BROKER_URL:?Set a complete encoded Redis URL outside Git}
+      LLM_LAB_EMBEDDING_URL: http://tei:80
+      LLM_LAB_EMBEDDING_REVISION: ${LLM_LAB_EMBEDDING_REVISION:?Provide immutable embedding revision}
+      LLM_LAB_UPLOAD_ROOT: /var/lib/llm-lab/uploads
+    ports:
+      - "127.0.0.1:18080:8000"
+    volumes:
+      - uploads:/var/lib/llm-lab/uploads
+    networks: [backend]
+    cpus: 2
+    mem_limit: 1g
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    profiles: [application]
+    command: ["python", "-m", "app.documents.worker", "worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app_environment
+      LLM_LAB_WORKER_TOKENIZER_PATH: /srv/tokenizer/e5
+    volumes:
+      - uploads:/var/lib/llm-lab/uploads:ro
+      - ../.cache/tokenizers/e5:/srv/tokenizer/e5:ro
+    networks: [backend]
+    cpus: 2
+    mem_limit: 1g
+    pids_limit: 128
+    stop_grace_period: 40s
+    restart: unless-stopped
+
+  recovery:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    profiles: [application]
+    command: ["python", "-m", "app.documents.worker", "recover"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *app_environment
+      LLM_LAB_WORKER_TOKENIZER_PATH: /srv/tokenizer/e5
+    volumes:
+      - uploads:/var/lib/llm-lab/uploads
+      - ../.cache/tokenizers/e5:/srv/tokenizer/e5:ro
+    networks: [backend]
+    cpus: 1
+    mem_limit: 512m
+    stop_grace_period: 40s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  uploads:

@@ -321,7 +321,7 @@ normalized = [value / norm for value in vector]
 
 **Interfaces:** `Lease(document_id: UUID, organization_id: UUID, attempt_id: UUID, attempt_count: int)`; async `JobRepository.claim(document_id) -> Lease | None`, `.renew(lease) -> bool`, `.publish(lease, chunks, vectors, revision) -> bool`, `.fail(lease, code, retryable) -> None`, `.recover_due() -> list[UUID]`. Worker task message contains only document ID; authoritative org comes from DB.
 
-- [ ] Fixture `jobs` owns a real PostgreSQL repository, `queued_document` inserts an accepted job. `expire_lease` is a test-only SQL helper setting DB expiry in the past. Write stale publication test.
+- [x] Fixture `jobs` owns a real PostgreSQL repository, `queued_document` inserts an accepted job. `expire_lease` is a test-only SQL helper setting DB expiry in the past. Write stale publication test.
 
 ```python
 async def test_old_attempt_cannot_publish(jobs, queued_document, expire_lease):
@@ -332,7 +332,7 @@ async def test_old_attempt_cannot_publish(jobs, queued_document, expire_lease):
     assert await jobs.publish(first, [], [], "test-revision") is False
 ```
 
-- [ ] Run RED. Claim with conditional row update and DB time, then increment attempt count exactly once. Renew current lease only; publish locks document then job in a consistent order, rechecks expiry/current attempt/deleted, inserts chunks and marks ready atomically.
+- [x] Run RED. Claim with conditional row update and DB time, then increment attempt count exactly once. Renew current lease only; publish locks document then job in a consistent order, rechecks expiry/current attempt/deleted, inserts chunks and marks ready atomically.
 
 ```sql
 UPDATE jobs SET lease_until = clock_timestamp() + interval '120 seconds'
@@ -340,10 +340,12 @@ WHERE document_id = :document_id AND attempt_id = :attempt_id
   AND lease_until > clock_timestamp();
 ```
 
-- [ ] Test concurrent duplicate claims, duplicate completion, DB commit before Redis failure, Redis reconnect, crash after claim, heartbeat loss, three-attempt exhaustion, deleted during computation. Use DB time mutation/barriers for races, not minute-long sleeps. Final publish and deletion must acquire document/job locks in the same order.
-- [ ] Implement Celery Linux worker concurrency1, task ID-only dispatch, heartbeat separate from CPU parsing, absolute process task timeout300s, broker notification/recovery every30s. Celery delivery cannot bypass DB claim; no independent automatic task retry loop.
-- [ ] Implement recovery of missed notifications and expired claims, 10/30s backoff, permanent input failure. Ensure crash-expired attempts also count toward maximum3. Add deleted-file/chunk cleanup and one-hour orphan reconciliation; skip active uploads using tracked IDs/creation times.
-- [ ] Run real Redis+worker process test: terminate a processing worker, start it again, verify final one ready document with one chunk set. Do not terminate unrelated user processes. Record timings. Commit `feat: recover leased document processing safely`.
+- [x] Test concurrent duplicate claims, duplicate completion, DB commit before Redis failure, Redis reconnect, crash after claim, heartbeat loss, three-attempt exhaustion, deleted during computation. Use DB time mutation/barriers for races, not minute-long sleeps. Final publish and deletion must acquire document/job locks in the same order.
+- [x] Implement Celery Linux worker concurrency1, task ID-only dispatch, heartbeat separate from CPU parsing, absolute process task timeout300s, broker notification/recovery every30s. Celery delivery cannot bypass DB claim; no independent automatic task retry loop.
+- [x] Implement recovery of missed notifications and expired claims, 10/30s backoff, permanent input failure. Ensure crash-expired attempts also count toward maximum3. Add deleted-file/chunk cleanup and one-hour orphan reconciliation; skip active uploads using tracked IDs/creation times.
+- [x] Run real Redis+worker process test: terminate a processing worker, start it again, verify final one ready document with one chunk set. Do not terminate unrelated user processes. Record timings. Commit `feat: recover leased document processing safely`.
+
+검증 기록: [Worker 중단 복구](../../verification/worker-recovery.md). 실제 Redis·Linux Celery 프로세스 시험 2개 통과. 원격 GPU와 RAG 연결은 별도 단계다.
 
 ## Task 9: 권한을 적용한 검색과 실제 RAG 답변
 

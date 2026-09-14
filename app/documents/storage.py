@@ -1,9 +1,13 @@
 import asyncio
+import errno
+import importlib
 import os
 import shutil
 from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from functools import partial
 from pathlib import Path
+from typing import BinaryIO
 from uuid import UUID
 
 import anyio
@@ -39,10 +43,43 @@ class FileStorage:
         self.maximum_bytes = maximum_bytes
         self.minimum_free_bytes = minimum_free_bytes
 
+    def _upload_marker(self, organization_id: UUID, document_id: UUID) -> Path:
+        return self.root / str(organization_id) / f"{document_id}.upload"
+
+    def document_path(self, organization_id: UUID, document_id: UUID) -> Path:
+        return self.root / str(organization_id) / f"{document_id}.pdf"
+
+    @asynccontextmanager
+    async def track_upload(self, organization_id: UUID, document_id: UUID) -> AsyncIterator[None]:
+        marker = self._upload_marker(organization_id, document_id)
+        try:
+            lock = await self._acquire_upload_lock(marker, True)
+        except OSError:
+            raise AppError(
+                503, "storage_unavailable", "문서 저장 공간을 사용할 수 없습니다."
+            ) from None
+        assert lock is not None
+        try:
+            yield
+        finally:
+            await disk_operation(partial(self._release_lock, lock))
+
+    @asynccontextmanager
+    async def try_track_upload(
+        self, organization_id: UUID, document_id: UUID
+    ) -> AsyncIterator[bool]:
+        marker = self._upload_marker(organization_id, document_id)
+        lock = await self._acquire_upload_lock(marker, False)
+        try:
+            yield lock is not None
+        finally:
+            if lock is not None:
+                await disk_operation(partial(self._release_lock, lock))
+
     async def save(
         self, organization_id: UUID, document_id: UUID, body: AsyncIterator[bytes]
     ) -> Path:
-        path = self.root / str(organization_id) / f"{document_id}.pdf"
+        path = self.document_path(organization_id, document_id)
         temporary = path.with_suffix(".part")
         complete = False
         try:
@@ -102,3 +139,76 @@ class FileStorage:
 
     async def remove(self, path: Path) -> None:
         await disk_operation(lambda: path.unlink(missing_ok=True))
+
+    async def _acquire_upload_lock(self, path: Path, blocking: bool) -> BinaryIO | None:
+        # An acquisition can finish after cancellation. Keep its result so that the
+        # descriptor is explicitly released before propagating cancellation.
+        task = asyncio.create_task(
+            anyio.to_thread.run_sync(partial(self._acquire_lock, path, blocking))
+        )
+        cancelled = False
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                cancelled = True
+        lock = task.result()
+        if cancelled:
+            if lock is not None:
+                await disk_operation(partial(self._release_lock, lock))
+            raise asyncio.CancelledError
+        return lock
+
+    @staticmethod
+    def _acquire_lock(path: Path, blocking: bool) -> BinaryIO | None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        file = path.open("a+b")
+        try:
+            file.seek(0, os.SEEK_END)
+            if file.tell() == 0:
+                file.write(b"\0")
+                file.flush()
+                os.fsync(file.fileno())
+            file.seek(0)
+            if os.name == "nt":
+                msvcrt = importlib.import_module("msvcrt")
+
+                mode = msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK
+                try:
+                    msvcrt.locking(file.fileno(), mode, 1)
+                except OSError as error:
+                    if not blocking and error.errno in {
+                        errno.EACCES,
+                        errno.EAGAIN,
+                        errno.EDEADLK,
+                    }:
+                        file.close()
+                        return None
+                    raise
+            else:
+                fcntl = importlib.import_module("fcntl")
+                flags = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+                try:
+                    fcntl.flock(file.fileno(), flags)
+                except BlockingIOError:
+                    file.close()
+                    return None
+            os.utime(path, None)
+            return file
+        except BaseException:
+            file.close()
+            raise
+
+    @staticmethod
+    def _release_lock(file: BinaryIO) -> None:
+        try:
+            file.seek(0)
+            if os.name == "nt":
+                msvcrt = importlib.import_module("msvcrt")
+
+                msvcrt.locking(file.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl = importlib.import_module("fcntl")
+                fcntl.flock(file.fileno(), fcntl.LOCK_UN)
+        finally:
+            file.close()

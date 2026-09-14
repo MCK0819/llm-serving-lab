@@ -81,6 +81,7 @@ class Job(Base):
     organization_id: Mapped[UUID] = mapped_column(nullable=False)
     attempt_id: Mapped[UUID | None] = mapped_column()
     attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    attempt_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     next_attempt_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

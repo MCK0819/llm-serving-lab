@@ -1,6 +1,6 @@
 # 개발 시작하기
 
-현재는 기본 API, 생성 서버 통신, 스트리밍 제한, API Key 인증, 문서 접수·조회·삭제와 PDF 처리 부품을 구현했다. 질문 경로는 실제 문서 검색을 아직 연결하지 않아 유효한 키에는 `503 rag_unavailable`을 반환한다. 업로드 작업과 PDF 처리 부품을 연결하는 Worker는 다음 단계다.
+현재는 기본 API, 생성 서버 통신, 스트리밍 제한, API Key 인증, 문서 접수·조회·삭제와 중단 복구가 가능한 PDF 처리 Worker를 구현했다. 질문 경로는 실제 문서 검색을 아직 연결하지 않아 유효한 키에는 `503 rag_unavailable`을 반환한다.
 
 ## Windows에서 실행
 
@@ -37,6 +37,28 @@ docker run --rm --name llm-lab-api -p 127.0.0.1:8000:8000 llm-serving-lab:bootst
 ```
 
 API는 컨테이너에서 UID 10001로 실행된다. 배포 이미지에는 앱 코드·실행용 잠금 파일·DB 마이그레이션 파일을 복사한다. 기본 이미지는 Python 패치와 digest로 고정했다. 개발용 도구는 `requirements-dev.lock`, 실행용은 `requirements.lock`에 분리했다.
+
+## CPU 문서 처리 스택 실행
+
+`deploy/compose.yaml`은 기존 TEI 단독 실행에도 사용한다. API·PostgreSQL·Redis·문서 Worker·30초 복구 스캔은 `deploy/compose.application.yaml`을 함께 지정해 실행한다. 비밀값 파일은 저장소 밖의 접근이 제한된 위치에 둔다. 다음 네 값을 그 파일에 설정한다. DB와 Redis URL은 **전체 URL**로 제공하며 비밀번호에 URL 예약 문자가 있으면 퍼센트 인코딩한다.
+
+```text
+LLM_LAB_APP_DB_PASSWORD=<DB 서버 비밀번호>
+LLM_LAB_REDIS_PASSWORD=<Redis 서버 비밀번호>
+LLM_LAB_APPLICATION_DATABASE_URL=postgresql+psycopg://llm_lab:<인코딩한 DB 비밀번호>@postgres:5432/llm_lab
+LLM_LAB_APPLICATION_BROKER_URL=redis://:<인코딩한 Redis 비밀번호>@redis:6379/0
+```
+
+고정 E5 토크나이저 캐시 `.cache/tokenizers/e5`를 준비한 뒤 저장소 루트에서 실행한다. 아래 경로는 실제 비밀값 파일 위치로 바꾼다. API는 호스트의 `127.0.0.1:18080`에만 열리고 PostgreSQL·Redis는 호스트 포트를 열지 않는다. 기존 TEI 단독 명령에는 이 비밀값 파일이 필요 없다.
+
+```powershell
+$envFile = "C:\secure\llm-lab-application.env"
+docker compose --env-file deploy/models.env.example --env-file $envFile -f deploy/compose.yaml -f deploy/compose.application.yaml --profile embedding --profile application up -d --build
+docker compose --env-file deploy/models.env.example --env-file $envFile -f deploy/compose.yaml -f deploy/compose.application.yaml --profile embedding --profile application ps
+docker compose --env-file deploy/models.env.example --env-file $envFile -f deploy/compose.yaml -f deploy/compose.application.yaml --profile embedding --profile application down
+```
+
+`down`은 저장 볼륨을 지우지 않는다. PostgreSQL과 업로드 PDF는 별도 영속 볼륨에, Redis는 64 MiB 메모리 한도와 `noeviction` 정책을 적용한다. 오래된 중복 알림이 새 작업을 지연시킬 수 있고 큐가 가득 차면 Redis는 새 알림을 거부한다. DB가 작업 상태의 기준이므로 독립 복구 프로세스가 30초마다 시작하는 스캔에서 전달을 다시 시도한다. 이 주기는 30초 안의 처리 완료를 보장하지 않는다. 실제 공개 배포에는 HTTPS 프록시·백업·서버별 메모리 측정이 추가로 필요하다.
 
 ## PostgreSQL 통합 테스트
 
@@ -84,21 +106,21 @@ DB와 계정·키를 준비한 앱의 `/docs`에서 Authorize에 발급한 키�
 | GET /documents/{문서 번호} | 상태 확인. 다른 조직이나 삭제한 문서는 404 |
 | DELETE /documents/{문서 번호} | 올린 사람만 삭제 가능. 조회에서 즉시 제외 |
 
-현재는 Worker가 없으므로 접수 후 상태가 `queued`에 머문다. 텍스트 추출·암호화·손상 확인 부품은 구현했으며 이후 Worker가 호출한다. 업로드 시점에는 PDF 형식 표시와 시작 바이트만 검사하므로 접수 성공이 분석 성공을 뜻하지 않는다. 삭제는 논리 삭제이고 실제 파일 청소·재시도는 8단계에서 연결한다.
+Worker와 복구 프로세스가 실행 중이면 접수 후 DB 작업 권한을 획득해 PDF 텍스트를 추출하고 청크를 임베딩한다. 업로드 시점에는 PDF 형식 표시와 시작 바이트만 검사하므로 접수 성공이 분석 성공을 뜻하지 않는다. 삭제는 즉시 조회에서 제외되고 정기 청소가 파일·청크를 제거한다.
 
 파일은 최대 20 MiB, multipart 요청 전체는 21 MiB다. 조직별 미완료 작업 10개·전체 100개, 저장 공간 최소 여유 1 GiB를 적용한다. 파일 이름은 255자까지의 표시 정보이며 실제 파일 경로에는 사용하지 않는다.
 
-`LLM_LAB_UPLOAD_ROOT`로 PDF 저장 위치를 지정한다. 로컬 기본값은 `data/uploads`, Docker 기본값은 `/var/lib/llm-lab/uploads`다. 컨테이너를 교체해도 원본을 유지하려면 이 위치에 영속 볼륨을 연결해야 한다. DB와 PDF를 함께 보관해야 하며 운영용 Compose와 백업·복원 검증은 후속 단계다.
+`LLM_LAB_UPLOAD_ROOT`로 PDF 저장 위치를 지정한다. 로컬 기본값은 `data/uploads`, Docker 기본값은 `/var/lib/llm-lab/uploads`다. 운영용 Compose는 이 위치에 영속 볼륨을 연결한다. DB와 PDF를 같은 시점에 백업하고 복원하는 검증은 후속 단계다.
 
-`LLM_LAB_BROKER_URL`은 선택 설정이다. 지정하면 DB 기록 후 Celery의 `documents.process` 작업에 문서 번호만 전달한다. Redis 연결 실패·1초 알림 대기 초과에도 접수 기록은 유지된다. 동시에 전송하는 알림은 하나로 제한하며, 생략되거나 실패한 알림의 복구 스캔은 8단계에서 구현한다. 현재는 실행할 Worker가 없으므로 Redis 서버를 따로 띄울 필요가 없다.
+`LLM_LAB_BROKER_URL`은 선택 설정이다. 지정하면 DB 기록 후 Celery의 `documents.process` 작업에 문서 번호만 전달한다. Redis 연결 실패·1초 알림 대기 초과에도 접수 기록은 유지된다. 동시에 전송하는 알림은 하나로 제한하며, 생략되거나 실패한 알림은 독립 복구 프로세스가 DB를 스캔해 재전달한다.
 
-DB 저장 완료 여부를 확인할 수 없는 장애에서는 파일을 지우지 않고 503을 반환한다. 자동 재업로드는 같은 문서를 중복 접수할 수 있으므로 목록을 먼저 확인한다. 이런 파일과 강제 종료로 남은 파일의 정기 정리도 8단계 범위다.
+DB 저장 완료 여부를 확인할 수 없는 장애에서는 파일을 지우지 않고 503을 반환한다. 자동 재업로드는 같은 문서를 중복 접수할 수 있으므로 목록을 먼저 확인한다. 강제 종료로 남은 미등록 파일은 생성 후 1시간이 지나면 복구 프로세스가 정리한다.
 
 ## 설정과 범위
 
 환경변수 접두어는 `LLM_LAB_`이다. 예를 들어 `LLM_LAB_INFERENCE_URL`, `LLM_LAB_EMBEDDING_URL`로 내부 서비스 주소를 지정한다. 추론 통신 부품은 구현했지만 앱의 공개 경로에는 아직 연결하지 않았다. URL 안의 비밀번호·query·fragment는 허용하지 않는다. 실제 비밀값을 명령 기록·Git·문서에 넣지 않는다.
 
-DB 설정을 생략해도 liveness는 동작한다. 문서 처리·전체 보안·관측은 아직 구현 중이다. 검증 기록은 [첫 API 검증](verification/bootstrap.md), [인증과 조직 구분](verification/authentication.md)에 있다.
+DB 설정을 생략해도 liveness는 동작한다. 실제 문서 검색 질문 경로·전체 보안·관측은 아직 구현 중이다. 검증 기록은 [첫 API 검증](verification/bootstrap.md), [인증과 조직 구분](verification/authentication.md)에 있다.
 
 스트리밍의 동작과 제한은 [스트리밍 수명주기 검증](verification/stream-lifecycle.md)을 참고한다.
 
@@ -116,7 +138,7 @@ DB 설정을 생략해도 liveness는 동작한다. 문서 처리·전체 보안
 
 ## PDF 처리 부품과 실제 토크나이저 시험
 
-7단계의 `parse_pdf`, `chunk_pages`, `EmbeddingClient`는 Worker에서 조합할 처리 부품이다. 현재 업로드 API가 이들을 자동 실행하지는 않는다. 동기 PDF 파싱과 토크나이저 처리를 HTTP 요청 안에서 호출하지 않는다.
+`parse_pdf`, `chunk_pages`, `EmbeddingClient`는 별도 Worker 프로세스가 조합한다. 업로드 API는 DB 작업을 기록하고 문서 번호만 알리며, 동기 PDF 파싱과 토크나이저 처리를 HTTP 요청 안에서 호출하지 않는다.
 
 첫 준비에는 네트워크가 필요하다. 잠금 파일의 의존성을 설치한 환경에서 다음 명령으로 고정된 E5·Qwen 토크나이저 파일만 받는다. 생성 모델 가중치는 받지 않는다. 캐시와 파일 해시는 Git에서 제외된 `.cache/tokenizers`에 남는다.
 

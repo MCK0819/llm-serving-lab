@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     organization_job_limit: PositiveInt = 10
     global_job_limit: PositiveInt = 100
     broker_url: SecretStr | None = None
+    worker_tokenizer_path: Path | None = None
+    embedding_revision: str = "614241f622f53c4eeff9890bdc4f31cfecc418b3"
 
     @field_validator("broker_url")
     @classmethod
