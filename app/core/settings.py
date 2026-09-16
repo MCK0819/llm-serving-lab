@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     global_job_limit: PositiveInt = 100
     broker_url: SecretStr | None = None
     worker_tokenizer_path: Path | None = None
+    rag_embedding_tokenizer_path: Path | None = None
+    rag_generation_tokenizer_path: Path | None = None
     embedding_revision: str = "614241f622f53c4eeff9890bdc4f31cfecc418b3"
 
     @field_validator("broker_url")
@@ -79,4 +81,13 @@ class Settings(BaseSettings):
     def require_input_budget(self) -> Self:
         if self.output_tokens >= self.context_tokens:
             raise ValueError("Output reservation must leave room for input")
+        return self
+
+    @model_validator(mode="after")
+    def require_rag_dependencies(self) -> Self:
+        paths = (self.rag_embedding_tokenizer_path, self.rag_generation_tokenizer_path)
+        if any(path is not None for path in paths) and (
+            self.database_url is None or any(path is None for path in paths)
+        ):
+            raise ValueError("RAG requires a database and both local tokenizer paths")
         return self

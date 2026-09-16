@@ -1,6 +1,6 @@
 # 개발 시작하기
 
-현재는 기본 API, 생성 서버 통신, 스트리밍 제한, API Key 인증, 문서 접수·조회·삭제와 중단 복구가 가능한 PDF 처리 Worker를 구현했다. 질문 경로는 실제 문서 검색을 아직 연결하지 않아 유효한 키에는 `503 rag_unavailable`을 반환한다.
+현재는 기본 API, 생성 서버 통신, 스트리밍 제한, API Key 인증, 문서 접수·조회·삭제와 중단 복구가 가능한 PDF 처리 Worker, 조직별 문서 검색과 RAG 답변 연결을 구현했다. 질문 기능은 아래 토크나이저·DB·모델 서버 설정을 준비해야 동작한다. 원격 GPU 답변 품질은 아직 검증하지 않았다.
 
 ## Windows에서 실행
 
@@ -49,7 +49,7 @@ LLM_LAB_APPLICATION_DATABASE_URL=postgresql+psycopg://llm_lab:<인코딩한 DB �
 LLM_LAB_APPLICATION_BROKER_URL=redis://:<인코딩한 Redis 비밀번호>@redis:6379/0
 ```
 
-고정 E5 토크나이저 캐시 `.cache/tokenizers/e5`를 준비한 뒤 저장소 루트에서 실행한다. 아래 경로는 실제 비밀값 파일 위치로 바꾼다. API는 호스트의 `127.0.0.1:18080`에만 열리고 PostgreSQL·Redis는 호스트 포트를 열지 않는다. 기존 TEI 단독 명령에는 이 비밀값 파일이 필요 없다.
+고정 E5·Qwen 토크나이저 캐시 `.cache/tokenizers/e5`, `.cache/tokenizers/qwen`을 `python -m scripts.cache_tokenizers`로 준비한 뒤 저장소 루트에서 실행한다. 질문에 사용할 `LLM_LAB_INFERENCE_URL`도 API 컨테이너에서 접근 가능한 내부 vLLM 주소로 지정한다. 기본 localhost는 GPU 서버가 아니다. 아래 경로는 실제 비밀값 파일 위치로 바꾼다. API는 호스트의 `127.0.0.1:18080`에만 열리고 PostgreSQL·Redis는 호스트 포트를 열지 않는다. 기존 TEI 단독 명령에는 이 비밀값 파일이 필요 없다.
 
 ```powershell
 $envFile = "C:\secure\llm-lab-application.env"
@@ -120,7 +120,7 @@ DB 저장 완료 여부를 확인할 수 없는 장애에서는 파일을 지우
 
 환경변수 접두어는 `LLM_LAB_`이다. 예를 들어 `LLM_LAB_INFERENCE_URL`, `LLM_LAB_EMBEDDING_URL`로 내부 서비스 주소를 지정한다. 추론 통신 부품은 구현했지만 앱의 공개 경로에는 아직 연결하지 않았다. URL 안의 비밀번호·query·fragment는 허용하지 않는다. 실제 비밀값을 명령 기록·Git·문서에 넣지 않는다.
 
-DB 설정을 생략해도 liveness는 동작한다. 실제 문서 검색 질문 경로·전체 보안·관측은 아직 구현 중이다. 검증 기록은 [첫 API 검증](verification/bootstrap.md), [인증과 조직 구분](verification/authentication.md)에 있다.
+DB 설정을 생략해도 liveness는 동작한다. 사용자별 요청 횟수 제한과 관측은 후속 단계다. 질문 기능의 설정·권한·검증 범위는 [RAG 연결 기록](verification/rag.md)에 있다. Windows에서 API를 직접 실행할 때는 `LLM_LAB_RAG_EMBEDDING_TOKENIZER_PATH`와 `LLM_LAB_RAG_GENERATION_TOKENIZER_PATH`를 로컬 캐시 경로로 지정한다. 두 경로를 생략하면 질문은 `503 rag_unavailable`을 반환한다.
 
 스트리밍의 동작과 제한은 [스트리밍 수명주기 검증](verification/stream-lifecycle.md)을 참고한다.
 

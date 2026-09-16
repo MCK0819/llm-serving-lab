@@ -1,5 +1,13 @@
 name: llm-lab-cpu
 
+x-app-environment: &app_environment
+  LLM_LAB_DATABASE_URL: ${LLM_LAB_APPLICATION_DATABASE_URL:?Set a complete encoded DB URL outside Git}
+  LLM_LAB_BROKER_URL: ${LLM_LAB_APPLICATION_BROKER_URL:?Set a complete encoded Redis URL outside Git}
+  LLM_LAB_EMBEDDING_URL: http://tei:80
+  LLM_LAB_INFERENCE_URL: ${LLM_LAB_INFERENCE_URL:-http://127.0.0.1:8001}
+  LLM_LAB_EMBEDDING_REVISION: ${LLM_LAB_EMBEDDING_REVISION:?Provide immutable embedding revision}
+  LLM_LAB_UPLOAD_ROOT: /var/lib/llm-lab/uploads
+
 services:
   postgres:
     image: pgvector/pgvector:0.8.6-pg17-bookworm@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
@@ -58,16 +66,16 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    environment: &app_environment
-      LLM_LAB_DATABASE_URL: ${LLM_LAB_APPLICATION_DATABASE_URL:?Set a complete encoded DB URL outside Git}
-      LLM_LAB_BROKER_URL: ${LLM_LAB_APPLICATION_BROKER_URL:?Set a complete encoded Redis URL outside Git}
-      LLM_LAB_EMBEDDING_URL: http://tei:80
-      LLM_LAB_EMBEDDING_REVISION: ${LLM_LAB_EMBEDDING_REVISION:?Provide immutable embedding revision}
-      LLM_LAB_UPLOAD_ROOT: /var/lib/llm-lab/uploads
+    environment:
+      <<: *app_environment
+      LLM_LAB_RAG_EMBEDDING_TOKENIZER_PATH: /srv/tokenizers/e5
+      LLM_LAB_RAG_GENERATION_TOKENIZER_PATH: /srv/tokenizers/qwen
     ports:
       - "127.0.0.1:18080:8000"
     volumes:
       - uploads:/var/lib/llm-lab/uploads
+      - ../.cache/tokenizers/e5:/srv/tokenizers/e5:ro
+      - ../.cache/tokenizers/qwen:/srv/tokenizers/qwen:ro
     networks: [backend]
     cpus: 2
     mem_limit: 1g

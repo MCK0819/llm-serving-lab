@@ -353,7 +353,7 @@ WHERE document_id = :document_id AND attempt_id = :attempt_id
 
 **Interfaces:** `SourceChunk(document_id: UUID, ordinal: int, filename: str, page: int, text: str)`; async `Retriever.search(organization_id, vector, revision, limit=5) -> list[SourceChunk]`; `PromptBuilder.build(question, chunks) -> PreparedPrompt` where `PreparedPrompt(messages, sources, input_tokens)`. `RagService.prepare(identity, question, request_id)` owns the prestream slot and opens the response resources from Task3; it returns a StreamResponse after preflight succeeds.
 
-- [ ] Create a PostgreSQL fixture where another organization's vector is the closest and has a unique sentinel. Verify filtering before Top5. Add not-ready/deleted/wrong-revision and deterministic tie tests.
+- [x] Create a PostgreSQL fixture where another organization's vector is the closest and has a unique sentinel. Verify filtering before Top5. Add not-ready/deleted/wrong-revision and deterministic tie tests.
 
 ```sql
 SELECT c.*, d.filename FROM chunks c JOIN documents d ON d.id = c.document_id
@@ -363,8 +363,8 @@ ORDER BY c.embedding <=> CAST(:query AS vector), d.id, c.ordinal
 LIMIT 5;
 ```
 
-- [ ] Run RED then implement bound-parameter exact search, no HNSW. Release DB transaction before prompt building/upstream call.
-- [ ] Write prompt tests using tokenizer fixtures: full chat-template budget3584, drop lowest-ranked chunks, actual sources match retained chunks, no result causes no model call, present-but-no-fit errors422 with context_budget_exceeded. Source IDs are generated server-side and filename/text are serialized as untrusted content.
+- [x] Run RED then implement bound-parameter exact search, no HNSW. Release DB transaction before prompt building/upstream call.
+- [x] Write prompt tests using tokenizer fixtures: full chat-template budget3584, drop lowest-ranked chunks, actual sources match retained chunks, no result causes no model call, present-but-no-fit errors422 with context_budget_exceeded. Source IDs are generated server-side and filename/text are serialized as untrusted content.
 
 ```python
 async def test_no_evidence_skips_generation(rag_empty, inference_spy):
@@ -376,8 +376,10 @@ async def test_no_evidence_skips_generation(rag_empty, inference_spy):
 
 `rag_empty` is a test adapter calling the real service with an empty retriever, collecting ASGI SSE data; `inference_spy` fails on any open call. Define both in this test module, not production code.
 
-- [ ] Implement one flow: authenticate→rate check→slot→E5 query budget→embedding→authorized retrieval→prompt budget→open inference→SSE. Empty result gets fixed `관련 문서에서 답변 근거를 찾지 못했습니다.` and no_context. Normal sources are sent once and match the prompt; only supported terminal reasons accepted.
-- [ ] Test deletion before search excludes document; deletion after authorized context acquisition allows existing response while new question excludes it. Test model override, cross-org sentinels and no credential/prompt in errors. Commit `feat: answer with authorized document evidence`.
+- [x] Implement one flow: authenticate→rate check→slot→E5 query budget→embedding→authorized retrieval→prompt budget→open inference→SSE. Empty result gets fixed `관련 문서에서 답변 근거를 찾지 못했습니다.` and no_context. Normal sources are sent once and match the prompt; only supported terminal reasons accepted.
+- [x] Test deletion before search excludes document; deletion after authorized context acquisition allows existing response while new question excludes it. Test model override, cross-org sentinels and no credential/prompt in errors. Commit `feat: answer with authorized document evidence`.
+
+완료 기록: [RAG 검증](../../verification/rag.md). Linux/PostgreSQL 292개 통과. 기존 StreamResponse가 처리 자리와 연결을 소유하며 RagService.prepare(identity, question, stack)를 호출한다. 사용자별 요청 횟수 제한은 Task 10에서 연결한다. 실제 GPU 생성 검증은 별도다.
 
 ## Task 10: 속도 제한·종료·민감정보 검증
 

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 type FinishReason = Literal["stop", "length"]
+type CompletionReason = FinishReason | Literal["no_context"]
 
 
 @dataclass(frozen=True)
@@ -17,5 +18,5 @@ class Usage:
 
 @dataclass(frozen=True)
 class Completed:
-    reason: FinishReason
+    reason: CompletionReason
     usage: Usage | None

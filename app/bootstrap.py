@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
@@ -14,16 +15,22 @@ from app.documents.service import DocumentService
 from app.documents.storage import FileStorage
 from app.inference.admission import Admission
 from app.inference.client import InferenceClient
+from app.rag.embedding import EmbeddingClient
+from app.rag.prompt import PromptBuilder
+from app.rag.retrieval import Retriever
+from app.rag.service import RagService
+from app.rag.tokenization import Tokenizer
 from app.users.repository import UserRepository
 from app.users.service import AuthService
 
 
-@dataclass(frozen=True)
+@dataclass
 class ApplicationServices:
     engine: AsyncEngine | None
     auth: AuthService | None
     admission: Admission
     documents: DocumentService | None
+    rag: RagService | None = None
 
 
 def build_services(settings: Settings) -> ApplicationServices:
@@ -64,12 +71,56 @@ def application_lifespan(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         try:
             async with inference_lifespan(settings)(app):
-                yield
+                async with rag_lifespan(settings, services, app.state.inference):
+                    yield
         finally:
             if services.engine is not None:
                 await services.engine.dispose()
 
     return lifespan
+
+
+@asynccontextmanager
+async def rag_lifespan(
+    settings: Settings, services: ApplicationServices, inference: InferenceClient
+) -> AsyncIterator[None]:
+    if (
+        services.engine is None
+        or settings.rag_embedding_tokenizer_path is None
+        or settings.rag_generation_tokenizer_path is None
+    ):
+        yield
+        return
+    try:
+        embedding_tokenizer = await asyncio.to_thread(
+            Tokenizer.from_pretrained, settings.rag_embedding_tokenizer_path
+        )
+        generation_tokenizer = await asyncio.to_thread(
+            Tokenizer.from_pretrained, settings.rag_generation_tokenizer_path
+        )
+    except Exception:
+        raise RuntimeError("Local RAG tokenizers could not be loaded") from None
+    async with httpx.AsyncClient(
+        base_url=str(settings.embedding_url),
+        trust_env=False,
+        follow_redirects=False,
+        timeout=httpx.Timeout(settings.read_timeout, connect=settings.connect_timeout),
+        limits=httpx.Limits(
+            max_connections=settings.running_limit,
+            max_keepalive_connections=settings.running_limit,
+        ),
+    ) as http:
+        services.rag = RagService(
+            EmbeddingClient(http, embedding_tokenizer, settings.embedding_revision),
+            Retriever(async_sessionmaker(services.engine, expire_on_commit=False)),
+            PromptBuilder(generation_tokenizer, settings.context_tokens - settings.output_tokens),
+            inference,
+            prompt_limit=settings.running_limit,
+        )
+        try:
+            yield
+        finally:
+            services.rag = None
 
 
 def inference_lifespan(
