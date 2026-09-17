@@ -39,4 +39,24 @@ docker compose -f deploy/compose.test.yaml run --rm test python -m pytest tests/
 
 ## 남은 것
 
+### 2026-09-17 무료 준비 재개
+
+`deploy/Dockerfile.vllm-ssh`, 전용 빌드 파일 허용 목록, SSH 설정과 시작 도구를 추가했다. 실제 OpenSSH를 설치한 일회용 Linux CPU 컨테이너에서 11개 시험이 통과했다. 공개키 누락·오류 거절, 파일 권한, 모델 실행 인자, SSH 인증과 포워딩 제한, 한 자식 프로세스 실패 시 다른 프로세스 종료, SIGTERM 정리를 확인했다. 기존 연결 점검 도구 16개 시험도 로컬에서 통과했다. 기본 이미지 전체를 빌드하거나 GPU를 대여한 결과는 아니다.
+
+종료 도구는 직접 실행한 프로세스를 기다린 뒤 남은 프로세스 그룹을 강제 종료한다. 부모 프로세스가 먼저 종료되면 하위 프로세스의 정상 종료 시간이 짧아질 수 있다. 실제 vLLM 요청 취소와 GPU 해제는 원격에서 별도 검증한다. 최종 이미지에 상속된 포트 메타데이터가 있을 수 있으므로 외부 매핑은 SSH 22만 허용하는지 직접 확인해야 한다.
+
+Runpod 콘솔 로그인과 표시 잔액 $0.00을 확인했다. 실제 가격·가용성 조회 내용과 사용자가 진행할 순서는 [첫 GPU 안내](../runbooks/first-gpu-session.md)에 기록했다. 유료 자원 생성·충전·이미지 게시를 수행하지 않았다.
+
 원격 업체·계정, 실제 결제 화면 견적, SSH 가능한 최종 GPU 이미지, 원격 vLLM 기동·GPU 취소·터널 복구·GPU 지표 검증은 남아 있다. 로컬 CPU 검증을 원격 배포 성공이나 부하 성능으로 표현하지 않는다. 유료 자원 생성과 충전은 수행하지 않았다.
+
+### 전체 이미지 빌드와 실제 SSH 검증
+
+2026-09-17 사용자가 C 드라이브 여유를 약 63.4GiB로 확보한 뒤 전체 이미지를 로컬에서 빌드했다. 다운로드·설치·이미지 저장이 정상 완료됐다. 확인 시점의 C 드라이브 잔여 공간은 약 28.2GiB였으며 Docker 저장 위치는 변경하지 않았다.
+
+완성된 이미지에서 `tests/fixtures/verify_gpu_image.py`를 실행했다. 컨테이너 외부 네트워크는 차단하고, 내부 임시 키로 실제 OpenSSH 인증과 엄격한 host key 확인을 거쳐 loopback HTTP 서버까지 터널 연결했다. 가상 HTTP 응답을 확인하는 시험이며 vLLM 모델은 시작하지 않는다. 빌드에 host key와 authorized_keys가 포함되지 않은 것도 검사한다.
+
+```powershell
+docker run --rm --network none --entrypoint python3 --mount "type=bind,src=$((Resolve-Path tests/fixtures/verify_gpu_image.py).Path),dst=/tmp/verify_gpu_image.py,readonly" llm-serving-lab:vllm-ssh-preflight /tmp/verify_gpu_image.py
+```
+
+결과는 `ssh_tunnel: passed`, `vllm_version: 0.28.0+cu129`, `model_started: false`, `baked_keys: false`였다. 별도로 공개키 환경변수 없이 기본 진입점을 실행하여 종료 코드 1과 시작 거부 메시지를 확인했다. image metadata의 공개 포트는 `22/tcp` 하나였으며 시험 컨테이너는 제거했다. 로컬 회귀는 22개 통과·Linux 전용 5개 제외, 앞선 Linux CPU 검증 11개 통과와 구분한다. 레지스트리 게시, 실제 GPU 기동, GPU 요청 취소, 성능 검증은 미완료다.

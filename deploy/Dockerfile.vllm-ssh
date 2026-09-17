@@ -1,0 +1,12 @@
+# Build from repository root: docker build -f deploy/Dockerfile.vllm-ssh -t <image> .
+FROM vllm/vllm-openai:v0.28.0-cu129@sha256:ac259a0111c6cf462a72e449962b84f7a624b5cbec24bd7d9ec3b67d40ffd1bf
+USER root
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openssh-server tini \
+    && rm -rf /var/lib/apt/lists/* /etc/ssh/ssh_host_* \
+    && mkdir -p /run/sshd
+COPY deploy/start_vllm_ssh.py /opt/llm-lab/start_vllm_ssh.py
+COPY deploy/sshd_config.vllm /etc/ssh/sshd_config.lab
+# Only map 22/tcp in the provider console. Never publish inference port 8000.
+EXPOSE 22/tcp
+ENTRYPOINT ["/usr/bin/tini", "--", "python3", "/opt/llm-lab/start_vllm_ssh.py"]
+CMD []

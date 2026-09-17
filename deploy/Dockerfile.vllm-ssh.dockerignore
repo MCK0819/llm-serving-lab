@@ -1,0 +1,5 @@
+*
+!deploy/
+!deploy/Dockerfile.vllm-ssh
+!deploy/start_vllm_ssh.py
+!deploy/sshd_config.vllm

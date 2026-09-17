@@ -10,7 +10,7 @@
 | GPU | Runpod Secure Cloud RTX A5000 24GB 비용 우선 후보 | PENDING: checkout 가격·가용성·공인 IP 확인 전 |
 | GPU host | CPU/RAM, NVIDIA driver, CUDA 호환성 | PENDING |
 | vLLM upstream image | `vllm/vllm-openai:v0.28.0-cu129@sha256:ac259a0111c6cf462a72e449962b84f7a624b5cbec24bd7d9ec3b67d40ffd1bf` | registry index digest 확인된 후보, GPU pull·runtime PENDING |
-| SSH 가능한 vLLM image | `sshd`와 vLLM을 함께 시작하는 파생 이미지 필요 | PENDING: 아직 준비되지 않음 |
+| SSH 가능한 vLLM image | 로컬 `llm-serving-lab:vllm-ssh-preflight`, image ID `sha256:6b6254cf47511b244cc0250592ee882237801d3bdc905c4ea658e8cdd946f2f9` | 빌드·실제 로컬 SSH 터널 확인. 레지스트리 게시·GPU 기동 PENDING |
 | 생성 모델 | `Qwen/Qwen3-4B-Instruct-2507` | metadata 확인됨, runtime PENDING |
 | 생성 revision | `cdbee75f17c01a7cc42f958dc650907174af0554` | immutable 후보 확인됨 |
 | 생성 형식·한도 | BF16, max model len 4096, max sequences 1 | 계획값, runtime PENDING |
@@ -22,6 +22,8 @@
 | TEI 접근·cache | local `127.0.0.1:18081`, named volume `tei-cache` | loopback으로 검증, 가중치 캐시는 재실행용 보관 |
 
 ## 검증 결과
+
+2026-09-17 SSH 파생 이미지의 전체 로컬 빌드가 완료됐다. 설치된 vLLM은 `0.28.0+cu129`이며 이미지 포트 메타데이터는 `22/tcp`만 포함한다. 외부 네트워크가 차단된 일회용 컨테이너에서 실제 SSH 키 인증·호스트 키 검증·로컬 터널을 통과했다. 이미지에 SSH host key와 authorized_keys가 없음을 확인했고, 공개키를 주지 않은 기본 실행은 종료 코드 1로 거부됐다. 모델을 로드하거나 GPU를 사용한 시험은 아니다. 위 image ID는 로컬 식별자이며 레지스트리에서 pull 가능한 최종 게시 주소·digest는 아직 없다.
 
 | 검증 | 결과 | 기록할 값 |
 |---|---|---|
