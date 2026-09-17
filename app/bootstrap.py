@@ -8,6 +8,9 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from app.core.database import create_database
+from app.core.health import HealthService
+from app.core.lifecycle import LifecycleCoordinator
+from app.core.rate_limit import RateLimiter
 from app.core.settings import Settings
 from app.documents.notifications import JobNotifier
 from app.documents.repository import DocumentRepository
@@ -30,6 +33,9 @@ class ApplicationServices:
     auth: AuthService | None
     admission: Admission
     documents: DocumentService | None
+    lifecycle: LifecycleCoordinator
+    health: HealthService
+    limiter: RateLimiter
     rag: RagService | None = None
 
 
@@ -42,6 +48,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         if engine
         else None
     )
+    lifecycle = LifecycleCoordinator()
     return ApplicationServices(
         engine,
         auth,
@@ -61,6 +68,9 @@ def build_services(settings: Settings) -> ApplicationServices:
         )
         if engine
         else None,
+        lifecycle,
+        HealthService(engine, settings.upload_root, lambda: lifecycle.draining),
+        RateLimiter(),
     )
 
 
@@ -72,8 +82,12 @@ def application_lifespan(
         try:
             async with inference_lifespan(settings)(app):
                 async with rag_lifespan(settings, services, app.state.inference):
-                    yield
+                    try:
+                        yield
+                    finally:
+                        await services.lifecycle.shutdown()
         finally:
+            await services.health.aclose()
             if services.engine is not None:
                 await services.engine.dispose()
 

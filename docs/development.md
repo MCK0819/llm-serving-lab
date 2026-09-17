@@ -14,6 +14,8 @@ py -3.14 -m venv .venv314
 
 `http://127.0.0.1:8000/health/live`는 `{"status":"ok"}`를 반환한다. 각 요청의 `X-Request-ID`는 서버가 새로 만든 식별자다. 이 응답은 DB·GPU가 준비되었다는 뜻이 아니라 웹 프로그램이 응답한다는 뜻이다.
 
+`/health/ready`는 DB와 업로드 저장소가 준비되었는지 확인하며, DB 미설정·검사 실패·종료 중에는 503을 반환한다. GPU·Redis의 준비 상태와는 별개다. 위 Uvicorn 명령은 로컬 개발용이다. 운영 Docker는 `python -m app.server`로 실행하여 종료 중 새 접수 차단과 30초 마무리 유예를 적용한다. 이 진입점은 `0.0.0.0:8000`에 바인딩하므로 컨테이너의 공개 포트를 제한해야 한다. [요청 제한과 종료 규칙](verification/service-limits.md)을 참고한다.
+
 ## 검사
 
 ```powershell

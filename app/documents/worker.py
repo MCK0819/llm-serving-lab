@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core.database import create_database
 from app.core.errors import AppError
+from app.core.logging import configure_logging
 from app.core.settings import Settings
 from app.documents.chunking import Chunk, chunk_pages
 from app.documents.parsing import parse_pdf
@@ -208,10 +209,7 @@ async def run_recovery(settings: Settings) -> None:
 
 def configure_worker_logging() -> None:
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s %(message)s")
-    # Malformed PDF warnings may contain document text. Keep only our safe failure codes.
-    pdf_logger = logging.getLogger("pypdf")
-    pdf_logger.handlers = [logging.NullHandler()]
-    pdf_logger.propagate = False
+    configure_logging()
 
 
 def main() -> None:

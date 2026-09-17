@@ -9,15 +9,27 @@ from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
 from app.core.errors import AppError
+from app.core.rate_limit import RateLimiter
 from app.documents.service import DocumentService
 from app.users.dependencies import identity_dependency
 from app.users.service import AuthService
 from app.users.types import Identity
 
 
-def build_document_router(auth: AuthService | None, service: DocumentService | None) -> APIRouter:
+def build_document_router(
+    auth: AuthService | None,
+    service: DocumentService | None,
+    limiter: RateLimiter | None = None,
+) -> APIRouter:
     router = APIRouter(prefix="/documents", tags=["documents"])
     authenticate = identity_dependency(auth)
+
+    async def read_identity(
+        identity: Annotated[Identity, Depends(authenticate)],
+    ) -> Identity:
+        if limiter is not None:
+            limiter.check(identity.user_id, "read")
+        return identity
 
     def documents() -> DocumentService:
         if service is None:
@@ -46,6 +58,8 @@ def build_document_router(auth: AuthService | None, service: DocumentService | N
     async def upload(
         request: Request, identity: Annotated[Identity, Depends(authenticate)]
     ) -> JSONResponse:
+        if limiter is not None:
+            limiter.check(identity.user_id, "upload")
         document_service = documents()
         if (
             request.headers.get("content-type", "").split(";")[0].strip().lower()
@@ -85,7 +99,7 @@ def build_document_router(auth: AuthService | None, service: DocumentService | N
     @router.get("")
     async def list_documents(
         request: Request,
-        identity: Annotated[Identity, Depends(authenticate)],
+        identity: Annotated[Identity, Depends(read_identity)],
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
         cursor: Annotated[str | None, Query(max_length=512)] = None,
     ) -> JSONResponse:
@@ -98,7 +112,7 @@ def build_document_router(auth: AuthService | None, service: DocumentService | N
     async def get_document(
         document_id: UUID,
         request: Request,
-        identity: Annotated[Identity, Depends(authenticate)],
+        identity: Annotated[Identity, Depends(read_identity)],
     ) -> JSONResponse:
         detail = await documents().get(identity, document_id)
         return JSONResponse(
@@ -107,7 +121,7 @@ def build_document_router(auth: AuthService | None, service: DocumentService | N
 
     @router.delete("/{document_id}", status_code=204)
     async def delete_document(
-        document_id: UUID, identity: Annotated[Identity, Depends(authenticate)]
+        document_id: UUID, identity: Annotated[Identity, Depends(read_identity)]
     ) -> Response:
         await documents().delete(identity, document_id)
         return Response(status_code=204)

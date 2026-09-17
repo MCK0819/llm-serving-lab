@@ -1,3 +1,5 @@
+from collections.abc import Mapping
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
@@ -7,11 +9,19 @@ from starlette.responses import JSONResponse
 class AppError(Exception):
     """An expected failure with a deliberately public message; never wrap raw exceptions."""
 
-    def __init__(self, status: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        message: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
         super().__init__(message)
         self.status = status
         self.code = code
         self.message = message
+        self.headers = dict(headers or {})
 
 
 def error_response(request: Request, status: int, code: str, message: str) -> JSONResponse:
@@ -26,7 +36,11 @@ def error_response(request: Request, status: int, code: str, message: str) -> JS
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def expected(request: Request, exc: AppError) -> JSONResponse:
-        return error_response(request, exc.status, exc.code, exc.message)
+        response = error_response(request, exc.status, exc.code, exc.message)
+        for name, value in exc.headers.items():
+            if name.lower() in {"allow", "www-authenticate", "retry-after"}:
+                response.headers[name] = value
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def invalid(request: Request, exc: RequestValidationError) -> JSONResponse:

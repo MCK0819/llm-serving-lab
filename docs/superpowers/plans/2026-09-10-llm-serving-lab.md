@@ -387,7 +387,7 @@ async def test_no_evidence_skips_generation(rag_empty, inference_spy):
 
 **Interfaces:** `RateLimiter(clock: Callable[[], float]).check(user_id: UUID, category: Literal['question','upload','read']) -> None`; use monotonic time and per-user bounded timestamp deques. `HealthService.ready() -> bool` checks DB, writable storage, draining flag. Shutdown coordinator owns request tasks, no module global registry.
 
-- [ ] Test sliding-window boundary with injected time and explicit Retry-After; max20 query hits followed by429, advance60s permits. Test categories independent, user segregation, eviction. Run RED then implement under one event-loop lock.
+- [x] Test sliding-window boundary with injected time and explicit Retry-After; max20 query hits followed by429, advance60s permits. Test categories independent, user segregation, eviction. RED/GREEN verified; synchronous no-await check/update on one event loop replaces an unnecessary lock.
 
 ```python
 limiter = RateLimiter(clock=lambda: now[0])
@@ -400,10 +400,12 @@ now[0] += 60
 limiter.check(user_id, "question")
 ```
 
-- [ ] Test ready false on DB/storage failure or draining, true with GPU/Redis stopped if DB/storage work. Service-specific question503 and document202 remain covered. Implement internal-only dependency metrics, no public endpoint exposing credentials/addresses.
-- [ ] Log tests put canaries in Authorization, PDF text, question, upstream error. Assert no canary in captured application logs or error responses, including malformed requests. Disable raw body logging; do not rely only on regex redaction after logging.
-- [ ] Real process shutdown test sends SIGTERM to a test-owned container: new work503, bounded completion/cancel, release upstream, worker recovery afterwards. Implement lifecycle drain30s then cancel/close and external stop grace40s.
-- [ ] Run tests and commit `feat: enforce service limits and bounded shutdown`.
+- [x] Ready false on DB/storage failure or draining; DB/storage checks independent of GPU/Redis. Service-specific question503 and document202 covered. Public endpoints expose no credentials/addresses. Ruling: internal dependency metrics are implemented with Task12 observability, not a second exporter here.
+- [x] Log tests put canaries in Authorization, PDF text, question, upstream error. Assert no canary in captured application logs or error responses, including malformed requests. Disable raw body logging; do not rely only on regex redaction after logging.
+- [x] Real process shutdown test sends SIGTERM to a test-owned container: new work503, bounded completion/cancel, release upstream, worker recovery afterwards. Implement lifecycle drain30s then cancel/close and external stop grace40s.
+- [x] Run tests and commit `feat: enforce service limits and bounded shutdown`.
+
+완료 기록: [제한·종료·민감정보 검증](../../verification/service-limits.md). 로컬253, Linux/PostgreSQL316, 별도 종료2·Worker복구2 통과. API 단일 프로세스와 외부40초 종료 상한을 전제로 한다. 실제 GPU·전체 모델 운영 스택은 이번 검증 범위 밖이다.
 
 ## Task 11: 실제 배포와 백업·복원 연습
 

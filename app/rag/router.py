@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.errors import AppError
+from app.core.rate_limit import RateLimiter
 from app.core.settings import Settings
 from app.inference.admission import Admission
 from app.inference.response import PreparedStream, StreamResponse
@@ -27,6 +28,7 @@ def build_question_router(
     prepare_question: QuestionPreparer | None,
     admission: Admission,
     settings: Settings,
+    limiter: RateLimiter | None = None,
 ) -> APIRouter:
     router = APIRouter()
     authenticate = identity_dependency(auth)
@@ -46,6 +48,8 @@ def build_question_router(
     async def question(
         request: Request, identity: Annotated[Identity, Depends(authenticate)]
     ) -> StreamResponse:
+        if limiter is not None:
+            limiter.check(identity.user_id, "question")
         payload = await read_question(request)
 
         async def prepare(stack: AsyncExitStack) -> PreparedStream:

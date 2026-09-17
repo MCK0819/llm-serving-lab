@@ -19,6 +19,8 @@
 
 ## 기록 원칙
 
+요청 횟수 제한, 준비 상태, 민감정보 로그 보호와 종료 동작은 [운영 제한 검증](verification/service-limits.md)에 기록한다.
+
 현재 구현·검증 결과는 [문서 접수](verification/documents.md), [PDF 텍스트 추출·청크·CPU 임베딩](verification/document-processing.md), [Worker 중단 복구](verification/worker-recovery.md), [권한을 적용한 RAG 연결](verification/rag.md)에 기록한다. RAG의 API·DB·스트리밍 연결을 시험용 모델 응답으로 검증했으며, 원격 GPU 생성과 실제 답변 품질 검증은 남아 있다.
 
 - 쉬운 설명 → 구체적인 예 → 기술 용어 순서로 설명합니다. 약어는 처음 등장할 때 뜻을 풀어 씁니다.
